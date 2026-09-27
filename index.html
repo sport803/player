@@ -347,6 +347,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
    Shaka `<script>…const streamUrl = "…mpd"…&lt;/script&gt;` and clearKeys block,
    including newline-separated forms. Regex comment stripper retained only as
    a fallback for non-DOMParser environments.
+
+   v4 fixes (signed-url): Tencent-Cloud-style signed URLs (txSecret/txTime,
+   wsSecret/wsTime, auth_key, sign, expire, e) are now passed through byte-
+   for-byte end to end — no proxying, no adapter cascade beyond hls.js /
+   native-hls, no URL mutation — matching the behaviour of the reference
+   DPlayer + hls.js build. See every `// [signed-url]` comment below.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const _ooe = window.onerror;
@@ -362,6 +368,12 @@ window.addEventListener('unhandledrejection', e => {
 
 const SP = (() => {
 
+// [signed-url] Never let new URL()'s normalisation touch a playback string.
+// Detects Tencent-Cloud-style signed query params so downstream code can
+// take the raw-passthrough path instead of parsing/proxying/rewriting.
+const isSignedUrl = u => typeof u === 'string' &&
+  /([?&])(txSecret|txTime|wsSecret|wsTime|auth_key|sign|expire)=/i.test(u);
+
 /* ── Config: all magic numbers centralized ── */
 const CFG = {
   FALLBACK_URL: 'https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master_3360.m3u8',
@@ -373,6 +385,10 @@ const CFG = {
   AUTO_NEXT_DELAY: 5000,
   HEALTH_INTERVAL: 15000, STALL_TICKS: 3, LATENCY_WARN: 15,
   PROXY_TO: 9000, RESOLVE_TO: 9000, FETCH_TO: 8000, BATCH_BUDGET: 25000,
+  // [signed-url] Timeout used for player init when the stream URL carries a
+  // Tencent-Cloud-style signature. The 14s default kills cold-edge responses
+  // that the DPlayer reference build would simply wait out.
+  SIGNED_PLAYER_TO: 45000,
   // Optional first-party proxy. Use {url} in the endpoint when it expects a
   // placeholder; otherwise the encoded target is appended to the endpoint.
   OWN_PROXY: '',
@@ -437,6 +453,9 @@ function safe(url) {
     if (m) { const [a, b] = [+m[1], +m[2]]; if (a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return false; }
     return true;
   } catch { return false; }
+  // [signed-url] `safe()` above only ever returns a boolean — it never
+  // hands back `p.href` or any mutated form of the URL, so signed query
+  // strings passed in here are never normalised away by this check.
 }
 
 function normalizeStreamUrl(raw) {
@@ -638,7 +657,9 @@ if (!_isOnline) setOfflineBanner(true);
 /* ── Params ── */
 // URLSearchParams cannot be used for stream values because signed URLs contain
 // their own query parameters. Only the known player keys are separators.
-const RAW_PARAM_KEYS = ['mora','embed','one','data','drmkey','referer','thumb','team1','team2','league','score','clock'];
+// [signed-url] 'liveUrl' added so ?liveUrl=<encoded> (DPlayer-style) is
+// recognised as a raw stream source, same as the reference build.
+const RAW_PARAM_KEYS = ['liveUrl','mora','embed','one','data','drmkey','referer','thumb','team1','team2','league','score','clock'];
 function parseRawParams() {
   const raw = String(location.search || '').replace(/^\?/, '');
   const out = Object.create(null);
@@ -650,8 +671,12 @@ function parseRawParams() {
     const h = hits[i];
     const end = i + 1 < hits.length ? hits[i + 1].matchStart : raw.length;
     const value = raw.slice(h.start, Math.max(h.start, end));
+    // [signed-url] DPlayer-style double decode — tolerant of %26/%3D/%2F,
+    // matching the reference build's decodeURI-then-decodeURIComponent
+    // handling so a signed URL's own encoded query string survives intact.
     let decoded = value;
-    try { decoded = decodeURIComponent(value); } catch { /* keep raw value */ }
+    try { decoded = decodeURI(value); } catch {}
+    try { decoded = decodeURIComponent(decoded); } catch {}
     (out[h.key] ||= []).push(normalizeStreamUrl(decoded));
   }
   return out;
@@ -671,6 +696,7 @@ function getP(name) {
 }
 function getRawP(name) { return RAW_PARAMS[name]?.[0] || ''; }
 const moraP = getP('mora').filter(safe);
+const liveUrlP = getP('liveUrl').filter(safe);
 const embedP = getP('embed').filter(safe);
 const oneP = getP('one').filter(safe);
 const drmKP = getRawP('drmkey').trim();
@@ -679,7 +705,7 @@ const scoreTeam1 = getRawP('team1').trim();
 const scoreTeam2 = getRawP('team2').trim();
 const scoreLeague = getRawP('league').trim();
 const scoreManual = { score: getRawP('score'), clock: getRawP('clock'), league: getRawP('league') };
-console.info('[player] parsed stream URLs', { mora: moraP, embed: embedP, one: oneP });
+console.info('[player] parsed stream URLs', { mora: moraP, embed: embedP, one: oneP, liveUrl: liveUrlP });
 
 /* ── Toast / Banner ── */
 function toast(msg, dur = 2400) { clearTimeout(toastTimer); D.toast.textContent = msg; D.toast.classList.add('show'); toastTimer = setTimeout(() => D.toast.classList.remove('show'), dur); }
@@ -1661,6 +1687,25 @@ async function resolveStream(url) {
   GA.send('stream_resolve_start', { stream_url: url.slice(0, 80) });
   const t0 = Date.now();
 
+  // [signed-url] Tencent-style signed URL — pass through raw, no proxy,
+  // no HTML scraping, no parsing. Runs before every other branch so a
+  // signed manifest URL never gets near fetchProxied() or the !! DRM split.
+  if (isSignedUrl(url)) {
+    logSignedUrlInfo(url);
+    if (/\.m3u8([?&#]|$)/i.test(url)) {
+      const r = { type: 'hls', url, originalUrl: url };
+      cSet(ck, r);
+      GA.send('stream_resolve_success', { stream_type: 'hls', resolve_ms: Date.now() - t0, method: 'signed_direct' });
+      return r;
+    }
+    if (/\.mpd([?&#]|$)/i.test(url)) {
+      const r = { type: 'dash', url, originalUrl: url };
+      cSet(ck, r);
+      GA.send('stream_resolve_success', { stream_type: 'dash', resolve_ms: Date.now() - t0, method: 'signed_direct' });
+      return r;
+    }
+  }
+
   if (/kafeizhibo\.com\/(?:pc\/)?room\/\d+/.test(url)) {
     const resolved = await resolveKafeizhibo(url);
     if (resolved) {
@@ -2147,18 +2192,81 @@ const EmbedMgr = (() => {
 
 /* ── Signed URL diagnostics ── */
 const expiredMora = new Set();
+
+// [signed-url] Diagnostic helper — logs host/path/expiry/seconds-remaining
+// for any Tencent-Cloud-style signed URL, without ever printing the secret
+// value itself. Called from loadStreams() for every mora/liveUrl entry and
+// again inside resolveStream() when the signed-direct fast path fires.
+function logSignedUrlInfo(url) {
+  if (!isSignedUrl(url)) return;
+  try {
+    const u = new URL(url);
+    const tx = u.searchParams.get('txTime') || u.searchParams.get('wsTime') || u.searchParams.get('expire');
+    const isHex = tx && /^[0-9a-f]+$/i.test(tx) && !/^\d+$/.test(tx);
+    const expSec = tx ? (isHex ? parseInt(tx, 16) : parseInt(tx, 10)) : null;
+    const inSec = expSec ? expSec - Math.floor(Date.now() / 1000) : null;
+    console.info('[signed-url]', {
+      host: u.hostname,
+      path: u.pathname,
+      expires: expSec ? new Date(expSec * 1000).toISOString() : 'unknown',
+      inSeconds: inSec,
+      secretParam: ['txSecret', 'wsSecret', 'auth_key', 'sign'].find(k => u.searchParams.has(k)) || 'none',
+    });
+  } catch (e) { console.warn('[signed-url] parse failed', e); }
+}
+
+// [signed-url] signedTimestamp() now understands Tencent-Cloud-style
+// expiry params in priority order: txTime/wsTime (hex-or-decimal),
+// expire/expires/e (decimal seconds, or ms if > 1e12), then the original
+// `t` decimal-or-hex heuristic. Call sites are unchanged — still returns
+// Unix seconds or null.
 function signedTimestamp(url) {
   try {
-    const raw = new URL(url).searchParams.get('t');
-    if (!raw) return null;
-    const values = [/^[0-9]+$/.test(raw) ? Number(raw) : NaN, /^[0-9a-f]+$/i.test(raw) ? parseInt(raw, 16) : NaN].filter(Number.isFinite);
-    return values.find(v => v > 1000000000) || values[0] || null;
+    const u = new URL(url);
+    const parseHexOrDec = raw => {
+      if (!raw) return NaN;
+      if (/^[0-9]+$/.test(raw)) return Number(raw);
+      if (/^[0-9a-f]+$/i.test(raw)) return parseInt(raw, 16);
+      return NaN;
+    };
+
+    const txTime = u.searchParams.get('txTime');
+    if (txTime) { const v = parseHexOrDec(txTime); if (Number.isFinite(v)) return v; }
+
+    const wsTime = u.searchParams.get('wsTime');
+    if (wsTime) { const v = parseHexOrDec(wsTime); if (Number.isFinite(v)) return v; }
+
+    const expireRaw = u.searchParams.get('expire') || u.searchParams.get('expires') || u.searchParams.get('e');
+    if (expireRaw && /^[0-9]+$/.test(expireRaw)) {
+      let v = Number(expireRaw);
+      if (v > 1e12) v = Math.floor(v / 1000);
+      if (Number.isFinite(v)) return v;
+    }
+
+    const raw = u.searchParams.get('t');
+    if (raw) {
+      const values = [/^[0-9]+$/.test(raw) ? Number(raw) : NaN, /^[0-9a-f]+$/i.test(raw) ? parseInt(raw, 16) : NaN].filter(Number.isFinite);
+      return values.find(v => v > 1000000000) || values[0] || null;
+    }
+    return null;
   } catch { return null; }
 }
 function checkSignedExpiry() {
   moraP.forEach((url, i) => {
     const t = signedTimestamp(url);
     if (t && Date.now() / 1000 > t + 3600) { expiredMora.add(i); console.warn('[player] signed URL may be expired', { index: i + 1, t }); }
+  });
+  // [signed-url] User-visible warning + red health dot (not just a console
+  // log) the moment a signed URL is already past its own expiry timestamp.
+  moraP.forEach((url, i) => {
+    if (!isSignedUrl(url)) return;
+    const t = signedTimestamp(url);
+    if (t && Date.now() / 1000 > t) {
+      expiredMora.add(i);
+      const streamIdx = streams.findIndex(s => s.originalUrl === url);
+      if (streamIdx >= 0) setHealthDot(streamIdx, 'red');
+      toast('⚠ This stream link has expired', 4200);
+    }
   });
 }
 
@@ -2178,7 +2286,7 @@ const ADAPTERS = [
         GA.attachVideo(v, 'native-hls');
         v.addEventListener('loadedmetadata', () => { safePlay(v); res(); }, { once: true });
         v.addEventListener('error', () => rej(new Error('Native HLS failed')), { once: true });
-      }), 20000);
+      }), isSignedUrl(s.url) ? CFG.SIGNED_PLAYER_TO : 20000);
     },
   },
   {
@@ -2261,12 +2369,15 @@ const ADAPTERS = [
         });
         p.addEventListener('error', e => { GA.send('shaka_error', { error_code: e.detail?.code || 0 }); });
         p.getNetworkingEngine().registerRequestFilter((t, req) => {
+          // [signed-url] The HMAC is edge-bound — never let Shaka's own proxy
+          // rewrite touch a signed request.
+          if (req.uris.some(uri => isSignedUrl(uri))) return;
           if (refP) req.headers['Referer'] = refP;
           if (CFG.OWN_PROXY) req.uris = req.uris.map(uri => rewriteProxyUrl(uri));
         });
         if (s.drm) p.configure({ drm: { clearKeys: { [s.drm.keyId]: s.drm.key } } });
         try {
-          await p.load(CFG.OWN_PROXY ? rewriteProxyUrl(s.url) : s.url);
+          await p.load(CFG.OWN_PROXY && !isSignedUrl(s.url) ? rewriteProxyUrl(s.url) : s.url);
           setTimeout(() => safePlay(v), 100);
           const tr = p.getVariantTracks().filter(t => t.type === 'variant');
           const heights = [...new Set(tr.map(t => t.height || 0))].filter(Boolean).sort((a, b) => a - b);
@@ -2287,7 +2398,10 @@ const ADAPTERS = [
           hideQuality();
           D2(() => res());
         } catch (e) {
-          if (!CFG.OWN_PROXY && /TypeError|failed to fetch|network/i.test(String(e?.message || e))) {
+          // [signed-url] Signed URLs must never fall back to the CORS proxy
+          // retry — the proxy would strip/reorder the query string and
+          // invalidate the HMAC.
+          if (!isSignedUrl(s.url) && !CFG.OWN_PROXY && /TypeError|failed to fetch|network/i.test(String(e?.message || e))) {
             GA.send('cors_detected', { adapter_name: 'shaka', details: String(e?.message || e) });
             try { toast('Retrying via proxy…'); GA.send('proxy_retry', { adapter_name: 'shaka', target_url: s.url.slice(0, 120) }); await p.load(rewriteProxyUrl(s.url, true)); D2(() => res()); return; } catch (e2) { e = e2; }
           }
@@ -2303,6 +2417,8 @@ const ADAPTERS = [
     init(hid, s) {
       return withTO(new Promise((res, rej) => {
         if (!Hls.isSupported()) return rej(new Error('HLS.js: MSE not supported'));
+        // [signed-url] Signed URLs must never be rewritten or proxied.
+        const SIGNED = isSignedUrl(s.url);
         const v = newVid({});
         document.getElementById(hid).appendChild(v);
         curPlayer = v;
@@ -2316,6 +2432,7 @@ const ADAPTERS = [
           startFragPrefetch: true, nudgeOffset: .3, nudgeMaxRetry: 5,
           autoStartLoad: true, startPosition: -1,
           xhrSetup: (xhr, url) => {
+            if (SIGNED) return; // never rewrite a signed request URL
             const alreadyOwn = CFG.OWN_PROXY && String(url).startsWith(CFG.OWN_PROXY);
             const alreadyFallback = /(?:corsproxy\.io|codetabs\.com|allorigins\.win)/i.test(String(url));
             const target = alreadyOwn || alreadyFallback ? url : (useFallbackProxy ? rewriteProxyUrl(url, true) : rewriteProxyUrl(url));
@@ -2330,20 +2447,29 @@ const ADAPTERS = [
           if (d.fatal) {
             GA.send('hlsjs_fatal_error', { error_type: d.type, error_details: d.details });
             if (!done) {
-              const responseCode = d.response?.code;
-              const corsError = (responseCode === 0 && d.networkDetails?.loaded === 0) || (d.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR && responseCode === 0) || /cors|blocked|failed to fetch/i.test(String(d.details || d.error || ''));
-              if (corsError) {
-                GA.send('cors_detected', { adapter_name: 'hlsjs', details: String(d.details || '') });
-                if (!retriedProxy && !CFG.OWN_PROXY) {
-                  retriedProxy = true; useFallbackProxy = true; iframeFallbackUrl = s.url;
-                  toast('Retrying via proxy…'); GA.send('proxy_retry', { adapter_name: 'hlsjs', target_url: s.url.slice(0, 120) });
-                  h.stopLoad(); h.loadSource(rewriteProxyUrl(s.url, true)); h.startLoad(); return;
+              // [signed-url] Signed URLs must never trigger useFallbackProxy,
+              // retriedProxy, or iframeFallbackUrl — wrap the entire
+              // corsError block so it's skipped outright for signed streams.
+              if (!SIGNED) {
+                const responseCode = d.response?.code;
+                const corsError = (responseCode === 0 && d.networkDetails?.loaded === 0) || (d.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR && responseCode === 0) || /cors|blocked|failed to fetch/i.test(String(d.details || d.error || ''));
+                if (corsError) {
+                  GA.send('cors_detected', { adapter_name: 'hlsjs', details: String(d.details || '') });
+                  if (!retriedProxy && !CFG.OWN_PROXY) {
+                    retriedProxy = true; useFallbackProxy = true; iframeFallbackUrl = s.url;
+                    toast('Retrying via proxy…'); GA.send('proxy_retry', { adapter_name: 'hlsjs', target_url: s.url.slice(0, 120) });
+                    h.stopLoad(); h.loadSource(rewriteProxyUrl(s.url, true)); h.startLoad(); return;
+                  }
+                  if (!CFG.OWN_PROXY && retriedProxy) iframeFallbackUrl = s.url;
                 }
-                if (!CFG.OWN_PROXY && retriedProxy) iframeFallbackUrl = s.url;
+                if (d.type === Hls.ErrorTypes.NETWORK_ERROR && !corsError) { h.startLoad(); return; }
+              } else if (d.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                // Still allow hls.js's own network retry for signed streams —
+                // just never route it through a proxy or iframe fallback.
+                h.startLoad(); return;
               }
-              if (d.type === Hls.ErrorTypes.NETWORK_ERROR && !corsError) { h.startLoad(); return; }
               if (d.type === Hls.ErrorTypes.MEDIA_ERROR) { h.recoverMediaError(); return; }
-              done = true; rej(new Error(`HLS.js: ${d.type}/${d.details}${corsError ? ' CORS blocked' : ''}`));
+              done = true; rej(new Error(`HLS.js: ${d.type}/${d.details}`));
             }
           } else GA.sendSampled('hlsjs_recoverable_error', 'hrec', { error_type: d.type }, 8000);
         });
@@ -2368,7 +2494,7 @@ const ADAPTERS = [
             res();
           });
         });
-      }));
+      }), isSignedUrl(s.url) ? CFG.SIGNED_PLAYER_TO : CFG.PLAYER_TO);
     },
   },
   {
@@ -2402,8 +2528,9 @@ const ADAPTERS = [
         p.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED, e => GA.send('quality_changed', { from_quality: String(e.oldQuality), to_quality: String(e.newQuality), trigger_source: 'auto' }));
         p.on(dashjs.MediaPlayer.events.ERROR, e => { if (!done) { done = true; GA.send('dashjs_error', { error_message: e.message || 'unknown' }); rej(new Error(`Dash.js: ${e.message || 'Unknown'}`)); } });
         if (s.drm) p.setProtectionData({ 'org.w3.clearkey': { clearkeys: { [s.drm.keyId]: s.drm.key } } });
+        // [signed-url] Never proxy-rewrite a signed manifest URL for dash.js.
         p.initialize(v, s.url, true);
-      }));
+      }), isSignedUrl(s.url) ? CFG.SIGNED_PLAYER_TO : CFG.PLAYER_TO);
     },
   },
   {
@@ -2494,6 +2621,16 @@ async function playStream(stream, gen) {
     if (av !== bv) return av - bv;
     return a.pri - b.pri;
   });
+
+  // [signed-url] The HMAC is edge-bound. Only hls.js and native HLS may
+  // touch it — this is what stops JWPlayer, Shaka, Video.js, iframe-hls
+  // and the plain native adapter from ever seeing the URL and, in the
+  // case of adapters that call new URL()/rebuild query strings, stripping
+  // or reordering it.
+  if (isSignedUrl(stream.url)) {
+    cands = cands.filter(a => a.name === 'hlsjs' || a.name === 'native-hls');
+    GA.send('signed_url_adapter_whitelist', { allowed: cands.map(a => a.name).join(',') });
+  }
 
   let ok = false, lastE = '', okAdapter = '';
   const total = cands.length;
@@ -2611,14 +2748,17 @@ function showFallback(reason = 'all_failed') {
 async function loadStreams() {
   const result = [];
   setLoading(true, 'Finding best stream…', 10);
-  GA.send('streams_load_start', { mora_count: moraP.length, embed_count: embedP.length, one_count: oneP.length });
+  GA.send('streams_load_start', { mora_count: moraP.length, embed_count: embedP.length, one_count: oneP.length, live_url_count: liveUrlP.length });
   const t0 = Date.now();
 
   console.info('[player] loading parsed mora streams', moraP);
-  const results = await Promise.allSettled(moraP.map(url => resolveStream(url)));
+  moraP.forEach(logSignedUrlInfo);
+  liveUrlP.forEach(logSignedUrlInfo);
+  const combinedRaw = [...moraP, ...liveUrlP];
+  const results = await Promise.allSettled(combinedRaw.map(url => resolveStream(url)));
   const mora = [];
   results.forEach((r, i) => {
-    if (r.status === 'fulfilled' && r.value) mora.push({ ...r.value, originalUrl: moraP[i] });
+    if (r.status === 'fulfilled' && r.value) mora.push({ ...r.value, originalUrl: combinedRaw[i] });
     else { console.warn(`mora[${i}] failed:`, r.reason?.message); GA.send('stream_resolve_fail', { stream_index: i, reason: r.reason?.message || 'unknown' }); }
   });
 
@@ -2677,6 +2817,24 @@ async function go(idx) {
   if (!streams.length) return;
   if (curStream && Perf.pStart) GA.send('stream_play_ended', { watch_sec: Perf.sec() });
   idx = Math.max(0, Math.min(idx, streams.length - 1));
+
+  // [signed-url] Don't burn an adapter attempt on a dead signature — check
+  // before touching curIdx/curStream/playGen so a stale expired link never
+  // reaches playStream() at all.
+  {
+    const target = streams[idx];
+    if (target && isSignedUrl(target.originalUrl)) {
+      const ts = signedTimestamp(target.originalUrl);
+      if (ts && Date.now() / 1000 > ts) {
+        GA.send('skipped_expired_signed_url', { stream_index: idx + 1 });
+        toast('⚠ This stream link has expired');
+        setHealthDot(idx, 'red');
+        const nextIdx = streams.findIndex((s, i) => i !== idx && (!isSignedUrl(s.originalUrl) || (signedTimestamp(s.originalUrl) || Infinity) > Date.now() / 1000));
+        if (nextIdx >= 0) return go(nextIdx);
+      }
+    }
+  }
+
   if (curStream && streams[idx]) {
     const label = streams[idx].customLabel || streamLabel(idx).name;
     toast(`Switching to ${label}…`);
@@ -2825,7 +2983,7 @@ function handleErrorFallback() {
 (async () => {
   ThumbMgr.init();
   GA.send('session_start', {
-    mora_sources: moraP.length, embed_sources: embedP.length, one_sources: oneP.length,
+    mora_sources: moraP.length, embed_sources: embedP.length, one_sources: oneP.length, live_url_sources: liveUrlP.length,
     has_drm_key: !!drmKP,
     referrer: document.referrer.slice(0, 80) || 'direct',
     user_agent: navigator.userAgent.slice(0, 120),
@@ -2833,7 +2991,7 @@ function handleErrorFallback() {
     device_pixel_ratio: window.devicePixelRatio || 1,
   });
 
-  if (!moraP.length && !embedP.length && !oneP.length) {
+  if (!moraP.length && !embedP.length && !oneP.length && !liveUrlP.length) {
     D.initPh.innerHTML = '<p style="color:rgba(255,255,255,.3);font-size:14px;">No stream source provided.</p>';
     setLoading(false);
     GA.send('init_no_sources');
