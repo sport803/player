@@ -1692,6 +1692,10 @@ async function resolveStream(url) {
   // signed manifest URL never gets near fetchProxied() or the !! DRM split.
   if (isSignedUrl(url)) {
     logSignedUrlInfo(url);
+    const signedExpiry = signedTimestamp(url);
+    if (signedExpiry && Date.now() / 1000 >= signedExpiry) {
+      throw new Error('Signed URL expired (txTime/expire) — request a fresh stream link');
+    }
     if (/\.m3u8([?&#]|$)/i.test(url)) {
       const r = { type: 'hls', url, originalUrl: url };
       cSet(ck, r);
@@ -2469,7 +2473,11 @@ const ADAPTERS = [
                 h.startLoad(); return;
               }
               if (d.type === Hls.ErrorTypes.MEDIA_ERROR) { h.recoverMediaError(); return; }
-              done = true; rej(new Error(`HLS.js: ${d.type}/${d.details}`));
+              done = true;
+              const responseCode = d.response?.code;
+              const status = Number.isFinite(responseCode) && responseCode > 0 ? ` HTTP ${responseCode}` : '';
+              const signedHint = SIGNED && responseCode === 403 ? ' — signed URL rejected; request a fresh link' : '';
+              rej(new Error(`HLS.js: ${d.type}/${d.details}${status}${signedHint}`));
             }
           } else GA.sendSampled('hlsjs_recoverable_error', 'hrec', { error_type: d.type }, 8000);
         });
