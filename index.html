@@ -67,6 +67,28 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .r-btn svg{width:13px;height:13px;flex-shrink:0}
 .r-btn.active-toggle{background:var(--red-dim);border-color:rgba(229,24,26,.4);color:var(--text)}
 @media(max-width:380px){.r-btn .r-label{display:none}}
+
+/* ── Join + Donate ── */
+.join-btn{text-decoration:none}
+.join-btn[hidden]{display:none}
+.r-btn.tg{color:#3db4f2;border-color:rgba(61,180,242,.35)}
+.r-btn.wa{color:#25d366;border-color:rgba(37,211,102,.35)}
+.r-btn.donate{color:#ff6b81;border-color:rgba(255,107,129,.35)}
+.r-btn.tg:hover,.r-btn.wa:hover,.r-btn.donate:hover{color:#fff}
+#donate-pop{position:absolute;inset:0;z-index:26;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:none;justify-content:center;align-items:center;padding:24px}
+#donate-pop.active{display:flex}
+.dp-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:26px 22px 20px;max-width:400px;width:100%;text-align:center;display:flex;flex-direction:column;gap:10px}
+.dp-ico{font-size:34px}
+.dp-ttl{font-size:16px;font-weight:700;color:var(--text)}
+.dp-msg{font-size:13px;line-height:1.65;color:var(--dim)}
+.dp-acts{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.dp-btn{display:block;padding:11px 16px;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;text-decoration:none;text-align:center;border:none;cursor:pointer;transition:all var(--t) var(--ease)}
+.dp-btn.bmc{background:#ffdd00;color:#000}
+.dp-btn.pat{background:#ff424d;color:#fff}
+.dp-btn.bmc:hover,.dp-btn.pat:hover{transform:translateY(-1px);filter:brightness(1.08)}
+.dp-btn.later{background:rgba(255,255,255,.08);color:var(--dim);border:1px solid var(--border2)}
+.dp-btn.later:hover{background:rgba(255,255,255,.14);color:var(--text)}
+
 #embed-shimmer{position:absolute;inset:0;z-index:4;background:linear-gradient(110deg,#0c0c0c 25%,#181818 50%,#0c0c0c 75%);background-size:400% 100%;animation:shimmer 1.5s ease infinite;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:14px;transition:opacity .35s}
 #embed-shimmer.hidden{opacity:0;pointer-events:none}
 @keyframes shimmer{0%{background-position:100% 50%}100%{background-position:0% 50%}}
@@ -301,11 +323,35 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
         <button type="button" class="sc-close" id="sc-close-btn">Close</button>
       </div>
     </div>
+    <div id="donate-pop" role="dialog" aria-modal="true" aria-labelledby="dp-ttl">
+      <div class="dp-box">
+        <div class="dp-ico">❤️</div>
+        <div class="dp-ttl" id="dp-ttl">Help keep the streams ad-free</div>
+        <div class="dp-msg">These streams are free for everyone. If you enjoy them, a small donation helps us keep them running without ads. Thank you!</div>
+        <div class="dp-acts">
+          <a class="dp-btn bmc" href="https://buymeacoffee.com/sports803" target="_blank" rel="noopener noreferrer">☕ Buy Me a Coffee</a>
+          <a class="dp-btn pat" href="https://www.patreon.com/Alvinalexa?utm_campaign=creatorshare_fan" target="_blank" rel="noopener noreferrer">🧡 Support on Patreon</a>
+          <button type="button" class="dp-btn later" id="dp-close">Maybe later</button>
+        </div>
+      </div>
+    </div>
   </div>
   <div id="btn-row">
     <div id="stream-btns"></div>
     <div class="row-divider"></div>
     <div id="row-controls">
+      <a class="r-btn join-btn tg" id="btn-tg" href="https://t.me/sport803s" target="_blank" rel="noopener noreferrer" title="Join our Telegram">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 3.5 2.5 10.8l5.6 2 2 6.2 3-3.6 4.6 3.4z"/><path d="M8.1 12.8 21.5 3.5"/></svg>
+        <span class="r-label">Telegram</span>
+      </a>
+      <a class="r-btn join-btn wa" id="btn-wa" href="https://whatsapp.com/channel/0029VaDEAX4BPzjaAKrPKD3k" target="_blank" rel="noopener noreferrer" title="Join our WhatsApp channel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 20.5l1.6-5.3A8.4 8.4 0 1 1 21 11.5z"/></svg>
+        <span class="r-label">WhatsApp</span>
+      </a>
+      <button type="button" class="r-btn donate" id="btn-donate" title="Support the streams">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+        <span class="r-label">Support</span>
+      </button>
       <select id="qual-sel" class="hidden" title="Quality" aria-label="Quality"><option value="-1">Auto</option></select>
       <button type="button" class="r-btn" id="btn-lowdata" title="Low Data Mode">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6l5 5 5-5 5 5 5-5"/><path d="M1 13l5 5 5-5 5 5 5-5"/></svg>
@@ -3058,6 +3104,42 @@ return {
   // Debug/QA helper — lets you inspect extraction against any page in DevTools.
   extractMfst,
 };
+})();
+</script>
+
+<!-- ── Join buttons + donation popup ── -->
+<script>
+(() => {
+  'use strict';
+  const POPUP_DELAY_MS = 25000;          // first show, after 25s on the page
+  const POPUP_COOLDOWN_MS = 24 * 3600e3; // don't re-show for 24h after it's been seen
+  const KEY = 'sp_donate_seen';
+
+  const pop = document.getElementById('donate-pop');
+  const track = (n, p) => { try { gtag('event', n, p || {}); } catch {} };
+  const open = src => { pop.classList.add('active'); track('donate_popup_open', { trigger_source: src }); try { document.getElementById('dp-close').focus(); } catch {} };
+  const close = () => {
+    pop.classList.remove('active');
+    try { localStorage.setItem(KEY, String(Date.now())); } catch {}
+  };
+
+  document.getElementById('dp-close').addEventListener('click', close);
+  pop.addEventListener('click', e => { if (e.target === pop) close(); });
+  document.getElementById('btn-donate').addEventListener('click', () => open('button'));
+  document.getElementById('btn-tg').addEventListener('click', () => track('join_telegram_click'));
+  document.getElementById('btn-wa').addEventListener('click', () => track('join_whatsapp_click'));
+  pop.querySelectorAll('a.dp-btn').forEach(a => a.addEventListener('click', () => track('donate_link_click', { target: a.classList.contains('bmc') ? 'buymeacoffee' : 'patreon' })));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && pop.classList.contains('active')) { e.stopPropagation(); close(); } }, true);
+
+  let last = 0;
+  try { last = parseInt(localStorage.getItem(KEY), 10) || 0; } catch {}
+  if (Date.now() - last > POPUP_COOLDOWN_MS) {
+    setTimeout(() => {
+      // Don't interrupt while an error panel is up
+      if (document.getElementById('err-panel').classList.contains('active')) return;
+      open('auto');
+    }, POPUP_DELAY_MS);
+  }
 })();
 </script>
 
