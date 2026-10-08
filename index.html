@@ -266,7 +266,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
       <iframe id="embed-frame"
         allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share; accelerometer; gyroscope"
         referrerpolicy="no-referrer-when-downgrade"
-        sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation"
         allowfullscreen></iframe>
       <div id="embed-err" role="alertdialog" aria-live="assertive">
         <div class="ee-icon" id="ee-icon">📡</div>
@@ -463,7 +462,6 @@ const CFG = {
   // placeholder; otherwise the encoded target is appended to the endpoint.
   OWN_PROXY: '',
   EVENT_SAMPLE_MS: 4000,
-  SANDBOX: 'allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation',
   PROXY: [
     u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
@@ -2181,7 +2179,10 @@ const EmbedMgr = (() => {
     const fr = document.createElement('iframe');
     fr.id = 'embed-frame';
     fr.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share; accelerometer; gyroscope');
-    fr.setAttribute('sandbox', CFG.SANDBOX);
+    // Some third-party stream embeds reject sandboxed iframe contexts (for
+    // example, by displaying "Sandbox not allowed" on desktop/Android). Keep
+    // the external player unsandboxed; cross-origin same-origin policy still
+    // prevents it from reading or modifying this page's DOM.
     fr.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
     fr.setAttribute('allowfullscreen', '');
     fr.className = '';
