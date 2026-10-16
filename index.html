@@ -1,19 +1,24 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Live Stream Player</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap"></noscript>
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-DPV3GTWK0P"></script>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"></noscript>
 <script>
 window.dataLayer=window.dataLayer||[];
 function gtag(){dataLayer.push(arguments);}
 gtag('js',new Date());
-gtag('config','G-DPV3GTWK0P',{send_page_view:true,transport_type:'beacon',custom_map:{dimension1:'stream_index',dimension2:'adapter_name',dimension3:'stream_type',dimension4:'app_state',dimension5:'trigger_source'}});
+gtag('config','G-DPV3GTWK0P',{send_page_view:true,transport_type:'beacon',page_location:location.origin+location.pathname});
+window.addEventListener('load', () => setTimeout(() => {
+  const s = document.createElement('script'); s.async = true;
+  s.src = 'https://www.googletagmanager.com/gtag/js?id=G-DPV3GTWK0P';
+  document.head.appendChild(s);
+}, 3000));
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -23,20 +28,21 @@ gtag('config','G-DPV3GTWK0P',{send_page_view:true,transport_type:'beacon',custom
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
   --text:#ffffff;--dim:rgba(255,255,255,0.55);--faint:rgba(255,255,255,0.28);
   --green:#22c55e;--amber:#f59e0b;
-  --font:'DM Sans',system-ui,sans-serif;--mono:'DM Mono',monospace;
+  --font:'DM Sans',system-ui,sans-serif;--mono:ui-monospace,monospace;
+  --z-base:1;--z-overlay:20;--z-toast:30;--z-panel:50;--z-app:2147483646;--z-max:2147483647;
   --r:9px;--t:.18s;--ease:cubic-bezier(.4,0,.2,1);
 }
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:var(--font);color:var(--text);-webkit-font-smoothing:antialiased}
-#app{display:flex;flex-direction:column;width:100%;height:100%;position:fixed;inset:0}
+#app{display:flex;flex-direction:column;width:100%;height:100%;position:fixed;inset:0;z-index:var(--z-app)}
 #stage{position:relative;flex:1;background:#000;overflow:hidden}
 #player-host,#embed-host{position:absolute;inset:0;width:100%;height:100%}
 #player-host{background:#000;z-index:2;display:none}
 #embed-host{z-index:3;display:none;flex-direction:column;background:#000}
 #embed-host.active{display:flex}
-#thumb-bg{position:absolute;inset:0;z-index:1;background-size:cover;background-position:center;filter:blur(8px) brightness(0.25);opacity:0;transition:opacity .4s;pointer-events:none}
+#thumb-bg{position:absolute;inset:0;z-index:var(--z-base);background-size:cover;background-position:center;filter:blur(8px) brightness(0.25);opacity:0;transition:opacity .4s;pointer-events:none}
 #thumb-bg.on{opacity:1}
 #thumb-bg.fade-out{opacity:0}
-#btn-row{display:none;flex-shrink:0;height:50px;background:var(--surface);border-top:1px solid var(--border);padding:0 10px;gap:7px;overflow-x:auto;overflow-y:hidden;align-items:center;scrollbar-width:none;z-index:200}
+#btn-row{display:flex;position:relative;flex-shrink:0;height:calc(50px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--border);padding:0 10px env(safe-area-inset-bottom);gap:7px;overflow-x:auto;overflow-y:hidden;align-items:center;scrollbar-width:none;z-index:var(--z-panel)}
 #btn-row::-webkit-scrollbar{display:none}
 #btn-row.visible{display:flex}
 #stream-btns{display:flex;gap:6px;align-items:center;flex-shrink:0}
@@ -44,8 +50,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .s-btn:hover{background:rgba(255,255,255,0.09);color:var(--text);border-color:rgba(255,255,255,0.2)}
 .s-btn:active{transform:scale(.97)}
 .s-btn.active{background:var(--red-dim);border-color:rgba(229,24,26,.4);color:var(--text)}
-.s-btn .dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.22);flex-shrink:0}
-.s-btn.active .dot{background:var(--red);animation:blink 1.8s ease-in-out infinite}
 .s-btn .health-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;transition:background .4s}
 .s-btn .health-dot.green{background:var(--green)}
 .s-btn .health-dot.amber{background:var(--amber)}
@@ -75,8 +79,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .r-btn.wa{color:#25d366;border-color:rgba(37,211,102,.35)}
 .r-btn.donate{color:#ff6b81;border-color:rgba(255,107,129,.35)}
 .r-btn.tg:hover,.r-btn.wa:hover,.r-btn.donate:hover{color:#fff}
-/* Floating join buttons (overlay on player + embeds) */
-#float-join{position:absolute;top:12px;right:12px;z-index:12;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+#float-join{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;z-index:12;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 #float-join.hidden{display:none}
 .fj-btn{display:flex;align-items:center;height:34px;min-width:34px;padding:0 9px;border-radius:100px;color:#fff;text-decoration:none;font-family:var(--font);font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.45);overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform var(--t) var(--ease),filter var(--t) var(--ease)}
 .fj-btn:hover{filter:brightness(1.12)}
@@ -88,7 +91,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 #float-join.expanded .fj-lbl,.fj-btn:hover .fj-lbl{max-width:90px;opacity:1;margin-left:7px}
 .fj-x{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(10,10,10,.6);backdrop-filter:blur(10px);color:rgba(255,255,255,.6);font-size:11px;line-height:1;cursor:pointer;padding:0;transition:color var(--t),background var(--t)}
 .fj-x:hover{color:#fff;background:rgba(10,10,10,.85)}
-#donate-pop{position:absolute;inset:0;z-index:26;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:none;justify-content:center;align-items:center;padding:24px}
+#donate-pop{position:absolute;inset:0;z-index:var(--z-panel);background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:none;justify-content:center;align-items:center;padding:24px}
 #donate-pop.active{display:flex}
 .dp-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:26px 22px 20px;max-width:400px;width:100%;text-align:center;display:flex;flex-direction:column;gap:10px}
 .dp-ico{font-size:34px}
@@ -122,7 +125,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .ee-btn.primary:hover{background:var(--red-hover);transform:translateY(-1px)}
 .ee-btn.sec{background:rgba(255,255,255,.09);color:var(--text);border:1px solid var(--border2)}
 .ee-btn.sec:hover{background:rgba(255,255,255,.15)}
-#loading{position:absolute;inset:0;z-index:20;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:none;flex-direction:column;justify-content:center;align-items:center;gap:16px;pointer-events:none}
+#loading{position:absolute;inset:0;z-index:var(--z-overlay);background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:none;flex-direction:column;justify-content:center;align-items:center;gap:16px;pointer-events:none}
 #loading.active{display:flex}
 .spinner{width:38px;height:38px;border:2.5px solid rgba(255,255,255,.1);border-top-color:var(--red);border-radius:50%;animation:spin .75s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -130,10 +133,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 #load-prog{width:160px;height:2px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;display:none}
 #load-prog.on{display:block}
 #load-fill{height:100%;background:var(--red);width:0%;transition:width .4s ease;border-radius:2px}
-#sw-banner{position:absolute;bottom:70px;left:50%;transform:translateX(-50%) translateY(14px);z-index:22;background:var(--surface);border:1px solid var(--border2);border-radius:100px;padding:8px 18px;gap:8px;display:flex;align-items:center;color:var(--dim);font-size:12px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+#sw-banner{position:absolute;bottom:70px;left:50%;transform:translateX(-50%) translateY(14px);z-index:var(--z-overlay);background:var(--surface);border:1px solid var(--border2);border-radius:100px;padding:8px 18px;gap:8px;display:flex;align-items:center;color:var(--dim);font-size:12px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
 #sw-banner.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .sw-dot{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:blink 1s ease-in-out infinite;flex-shrink:0}
-#err-panel{position:absolute;inset:0;z-index:21;background:rgba(0,0,0,.88);backdrop-filter:blur(8px);display:none;flex-direction:column;justify-content:center;align-items:center;padding:28px;pointer-events:none}
+#err-panel{position:absolute;inset:0;z-index:var(--z-overlay);background:rgba(0,0,0,.88);backdrop-filter:blur(8px);display:none;flex-direction:column;justify-content:center;align-items:center;padding:28px;pointer-events:none}
 #err-panel.active{display:flex;pointer-events:auto}
 .err-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:28px 26px 24px;max-width:420px;width:100%;text-align:center;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
 .err-ico{font-size:34px}
@@ -157,22 +160,23 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .fb-wrap iframe{width:100%;max-width:820px;height:min(420px,60vh);border-radius:var(--r);border:1px solid var(--border2);box-shadow:0 20px 60px rgba(0,0,0,.8)}
 .fb-btn{margin-top:8px;padding:9px 22px;background:var(--red);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:700;transition:background var(--t)}
 .fb-btn:hover{background:var(--red-hover)}
-#live-badge{position:absolute;top:13px;left:14px;z-index:10;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.52);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(12px);padding:5px 12px 5px 8px;border-radius:100px;opacity:0;transition:opacity var(--t) var(--ease);pointer-events:none}
+#live-badge{position:absolute;top:13px;left:14px;z-index:10;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.52);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(12px);padding:5px 12px 5px 8px;border-radius:100px;opacity:0;transition:opacity var(--t) var(--ease);pointer-events:auto;cursor:pointer}
 #live-badge.on{opacity:1}
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:blink 1.6s ease-in-out infinite;flex-shrink:0}
 #live-lbl{color:#fff;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-#toast{position:absolute;bottom:68px;left:50%;transform:translateX(-50%) translateY(14px);z-index:30;background:rgba(18,18,18,.94);border:1px solid var(--border2);backdrop-filter:blur(12px);color:var(--text);font-size:12px;font-weight:600;padding:8px 18px;border-radius:100px;white-space:nowrap;opacity:0;transition:opacity .22s,transform .22s;pointer-events:none}
+#toast{position:absolute;bottom:68px;left:50%;transform:translateX(-50%) translateY(14px);z-index:var(--z-toast);background:rgba(18,18,18,.94);border:1px solid var(--border2);backdrop-filter:blur(12px);color:var(--text);font-size:12px;font-weight:600;padding:8px 18px;border-radius:100px;white-space:nowrap;opacity:0;transition:opacity .22s,transform .22s;pointer-events:none}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 #g-hint{position:absolute;bottom:54px;left:50%;transform:translateX(-50%);z-index:12;background:rgba(0,0,0,.55);border:1px solid var(--border);backdrop-filter:blur(12px);color:var(--dim);font-size:11px;font-weight:600;padding:7px 16px;border-radius:100px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
 #g-hint.show{opacity:1}
 #init-ph{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;background:#000;z-index:5}
 #init-ph p{color:var(--faint);font-size:14px;letter-spacing:.04em}
-#tap-play{position:absolute;inset:0;z-index:24;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:none;justify-content:center;align-items:center;pointer-events:auto;cursor:pointer}
+#tap-play{position:absolute;inset:0;z-index:var(--z-panel);background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:none;justify-content:center;align-items:center;pointer-events:auto;cursor:pointer}
 #tap-play.on{display:flex}
 #tap-play-btn{display:inline-flex;align-items:center;gap:10px;padding:16px 30px;background:var(--red);color:#fff;border:none;border-radius:100px;font-family:var(--font);font-size:15px;font-weight:700;letter-spacing:.03em;box-shadow:0 12px 40px rgba(0,0,0,.7);cursor:pointer;transition:transform .15s,background .15s}
 #tap-play-btn:hover{background:var(--red-hover);transform:scale(1.04)}
 #tap-play-btn svg{width:20px;height:20px}
-#sc-overlay{position:absolute;inset:0;z-index:25;background:rgba(0,0,0,.92);backdrop-filter:blur(10px);display:none;justify-content:center;align-items:center;padding:24px}
+#stats-overlay{position:absolute;inset:0;z-index:var(--z-panel);background:rgba(0,0,0,.92);backdrop-filter:blur(10px);display:none;justify-content:center;align-items:center;padding:24px}#stats-overlay.active{display:flex}
+#sc-overlay{position:absolute;inset:0;z-index:var(--z-panel);background:rgba(0,0,0,.92);backdrop-filter:blur(10px);display:none;justify-content:center;align-items:center;padding:24px}
 #sc-overlay.active{display:flex}
 .sc-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:26px;max-width:500px;width:100%}
 .sc-ttl{color:var(--text);font-size:15px;font-weight:700;text-align:center;margin-bottom:18px}
@@ -212,7 +216,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 #jump-live-btn{position:absolute;bottom:56px;right:12px;z-index:12;display:none;align-items:center;gap:5px;background:var(--red);color:#fff;padding:6px 14px;border-radius:100px;border:none;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;transition:background var(--t),opacity .3s}
 #jump-live-btn:hover{background:var(--red-hover)}
 #jump-live-btn.on{display:flex}
-#offline-banner{position:absolute;top:0;left:0;right:0;z-index:50;display:none;justify-content:center;align-items:center;gap:8px;padding:10px 16px;background:rgba(10,10,10,.94);border-bottom:1px solid var(--border2);backdrop-filter:blur(8px);font-size:12px;font-weight:600;color:var(--dim)}
+#offline-banner{position:absolute;top:0;left:0;right:0;z-index:var(--z-panel);display:none;justify-content:center;align-items:center;gap:8px;padding:10px 16px;background:rgba(10,10,10,.94);border-bottom:1px solid var(--border2);backdrop-filter:blur(8px);font-size:12px;font-weight:600;color:var(--dim)}
 #offline-banner.on{display:flex}
 :root{--plyr-color-main:#e5181a;--plyr-font-family:'DM Sans',system-ui,sans-serif;--plyr-font-size-base:13px;--plyr-font-size-menu:12px;--plyr-font-weight-regular:500;--plyr-font-weight-bold:700;--plyr-video-background:#000;--plyr-video-controls-background:linear-gradient(to top,rgba(0,0,0,.9) 0%,transparent 100%);--plyr-control-spacing:10px;--plyr-control-padding:7px;--plyr-control-radius:6px;--plyr-control-icon-size:16px;--plyr-menu-background:#141414;--plyr-menu-color:rgba(255,255,255,.88);--plyr-menu-border-color:rgba(255,255,255,.1);--plyr-menu-border-radius:9px;--plyr-menu-shadow:0 12px 36px rgba(0,0,0,.8);--plyr-tooltip-background:#1c1c1c;--plyr-tooltip-color:#fff;--plyr-tooltip-padding:6px 11px;--plyr-tooltip-radius:7px;--plyr-tooltip-shadow:0 4px 18px rgba(0,0,0,.65);--plyr-range-track-height:3px;--plyr-range-thumb-width:14px;--plyr-range-thumb-height:14px;--plyr-range-thumb-background:#e5181a;--plyr-range-fill-background:#e5181a;--plyr-badge-background:#e5181a;--plyr-badge-border-radius:4px;--plyr-captions-background:rgba(0,0,0,.82)}
 .plyr--video{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;font-family:'DM Sans',system-ui,sans-serif!important}
@@ -245,9 +249,109 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .plyr__badge{background:#e5181a!important;border-radius:4px!important;font-family:'DM Sans',system-ui,sans-serif!important;font-size:9px!important;font-weight:700!important;letter-spacing:.05em!important;padding:2px 6px!important}
 .plyr__captions .plyr__caption{background:rgba(0,0,0,.82)!important;border-radius:4px!important;padding:3px 9px!important;font-family:'DM Sans',system-ui,sans-serif!important;font-size:13px!important;line-height:1.5!important}
 .plyr--fullscreen-active .plyr__controls{padding-bottom:20px!important}
-@media(max-width:600px){#btn-row{height:46px;padding:0 8px;gap:5px}.s-btn{padding:0 10px;height:32px;font-size:11px}.r-btn{padding:0 9px;height:32px;font-size:11px}#qual-sel{font-size:11px;height:32px;padding:0 8px}.sc-grid{grid-template-columns:1fr}.plyr__control--overlaid{padding:15px!important}}
+@media(max-width:600px){#btn-row{height:calc(46px + env(safe-area-inset-bottom,0px));padding:0 8px env(safe-area-inset-bottom,0px);gap:5px}.s-btn{padding:0 10px;height:32px;font-size:11px}.r-btn{padding:0 9px;height:32px;font-size:11px}#qual-sel{font-size:11px;height:32px;padding:0 8px}.sc-grid{grid-template-columns:1fr}.plyr__control--overlaid{padding:15px!important}}
 @media(max-width:360px){.s-btn .s-icon{display:none}.row-divider{display:none}}
 *:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+
+/* ══════════════════════════════════════════════════════════════════
+   PLAYER-ONLY MODE (active only when <html class="po">, which the
+   script at the bottom of <body> sets on /p/player.html)
+   ══════════════════════════════════════════════════════════════════ */
+html.po,html.po body{
+  margin:0!important;padding:0!important;
+  width:100%!important;height:100%!important;
+  overflow:hidden!important;background:#000!important;
+}
+/* hide the whole Blogger theme / page except the player */
+html.po body>*:not(#app){display:none!important}
+/* Hide secondary overlays in player-only mode, but retain the source/control
+   row as an interactive overlay and keep the donation dialog available. */
+/* Add ?ui=1 for the full page theme and floating join widgets. */
+html.po #float-join,
+html.po #live-badge,
+html.po #score-overlay,
+html.po #latency-badge,
+html.po #g-hint{display:none!important}
+html.po #toast{bottom:calc(64px + env(safe-area-inset-bottom,0px))!important}
+/* player fills the whole screen */
+html.po #app{
+  position:fixed!important;inset:0!important;
+  width:100vw!important;height:100vh!important;height:100dvh!important;
+  margin:0!important;transform:none!important;
+  z-index:var(--z-max)!important;
+}
+html.po #stage,html.po #embed-host,html.po #embed-frame{
+  position:absolute!important;inset:0!important;
+  width:100%!important;height:100%!important;
+}
+
+/* ── layout fixes ── */
+#stage{min-height:0}
+#btn-row{flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+#btn-row>*{flex-shrink:0}
+#float-join{top:calc(12px + env(safe-area-inset-top,0px));z-index:23}
+#live-badge{top:calc(13px + env(safe-area-inset-top,0px));z-index:22}
+#score-overlay{top:calc(13px + env(safe-area-inset-top,0px));z-index:21}
+/* In player-only mode, keep source switches and controls overlaid above the stream. */
+html.po body #app #btn-row{position:absolute!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;z-index:var(--z-panel)!important;display:flex!important;background:rgba(20,20,20,.88)!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+/* Embedded players draw their own controls inside the iframe. Reserve the
+   external control-row height so it cannot cover those controls. */
+html.po body #app #stage{bottom:calc(50px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 50px - env(safe-area-inset-bottom,0px))!important}
+html.po body #app.embed-mode #embed-host{bottom:calc(50px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 50px - env(safe-area-inset-bottom,0px))!important}
+@media(max-width:700px){
+  #score-overlay{left:12px;transform:none;top:calc(56px + env(safe-area-inset-top,0px));max-width:calc(100% - 140px)}
+}
+#loading,#tap-play,#live-badge,#score-overlay,#toast,#g-hint,#latency-badge,#sw-banner,.fj-btn{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#loading,#tap-play{background:rgba(0,0,0,.72)}
+html.po body #app #btn-row{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(20,20,20,.94)!important}
+#thumb-bg:not(.on){visibility:hidden}
+#ambient-glow{position:absolute;inset:-12%;z-index:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(229,24,26,.28),transparent 68%);filter:blur(42px);transition:background .8s ease,opacity .8s ease}
+#ambient-glow.on{opacity:1}
+#channel-mark{position:absolute;right:12px;bottom:calc(58px + env(safe-area-inset-bottom,0px));z-index:12;display:none;padding:5px 10px;border:1px solid var(--border2);border-radius:100px;background:rgba(10,10,10,.78);color:var(--dim);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;pointer-events:none}
+#channel-mark.on{display:block}
+#btn-switch-stream{position:absolute;top:calc(52px + env(safe-area-inset-top,0px));left:14px;z-index:23;display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid rgba(255,255,255,.1);border-radius:100px;background:rgba(0,0,0,.52);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;transition:background var(--t) var(--ease),opacity var(--t) var(--ease),transform var(--t) var(--ease)}
+#btn-switch-stream svg{width:14px;height:14px;flex-shrink:0}#btn-switch-stream:hover{background:rgba(255,255,255,.09)}#btn-switch-stream:active{transform:scale(.97)}#btn-switch-stream:disabled,#btn-switch-stream.disabled{opacity:.4;pointer-events:none}
+#btn-switch-stream.pulse{animation:switchPulse .3s ease}@keyframes switchPulse{50%{transform:scale(1.05)}}
+@media(max-width:480px){#btn-switch-stream{top:calc(54px + env(safe-area-inset-top,0px));left:10px;font-size:10px}}
+@media(prefers-reduced-motion:reduce){#btn-switch-stream.pulse{animation:none}}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.s-btn .health-dot{width:16px;height:12px;border-radius:0;background:linear-gradient(to top,rgba(255,255,255,.22) 0 100%) 0 100%/3px 28% no-repeat,linear-gradient(to top,rgba(255,255,255,.22) 0 100%) 6px 100%/3px 60% no-repeat,linear-gradient(to top,rgba(255,255,255,.22) 0 100%) 12px 100%/3px 100% no-repeat}
+.s-btn .health-dot.green{background:linear-gradient(to top,var(--green) 0 100%) 0 100%/3px 55% no-repeat,linear-gradient(to top,var(--green) 0 100%) 6px 100%/3px 78% no-repeat,linear-gradient(to top,var(--green) 0 100%) 12px 100%/3px 100% no-repeat}
+.s-btn .health-dot.amber{background:linear-gradient(to top,var(--amber) 0 100%) 0 100%/3px 35% no-repeat,linear-gradient(to top,var(--amber) 0 100%) 6px 100%/3px 55% no-repeat,linear-gradient(to top,rgba(245,158,11,.25) 0 100%) 12px 100%/3px 100% no-repeat}
+.s-btn .health-dot.red{background:linear-gradient(135deg,transparent 44%,var(--red) 45% 55%,transparent 56%),linear-gradient(to top,var(--red) 0 100%) 0 100%/3px 30% no-repeat,linear-gradient(to top,var(--red) 0 100%) 6px 100%/3px 45% no-repeat,linear-gradient(to top,var(--red) 0 100%) 12px 100%/3px 60% no-repeat}
+.s-btn:hover{transform:translateY(-1px)}
+.r-btn,.s-btn,.ee-btn{position:relative;overflow:hidden}.ripple{position:absolute;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.28);transform:translate(-50%,-50%) scale(1);animation:rippleOut .5s ease-out forwards;pointer-events:none}@keyframes rippleOut{to{transform:translate(-50%,-50%) scale(18);opacity:0}}
+#score-overlay{border-radius:10px;border-left:2px solid var(--red);box-shadow:0 10px 28px rgba(0,0,0,.5)}
+.live-dot{transition:background .2s,box-shadow .2s}
+.live-dot.amber{background:var(--amber);animation-duration:2.4s}
+.live-dot.red{background:var(--red);animation:none;box-shadow:0 0 10px rgba(229,24,26,.7)}
+@media(max-width:480px){#score-overlay{top:auto;bottom:calc(58px + env(safe-area-inset-bottom,0px));left:8px;right:8px;max-width:none;width:auto}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}.s-btn:hover{transform:none}#ambient-glow{transition:none}}
+html.bg-quiet *,html.bg-quiet *::before,html.bg-quiet *::after{animation-play-state:paused!important;transition:none!important}
+/* ── Professional broadcast-control skin ── */
+:root{--bg:#080b10;--surface:#111720;--surface2:#18212d;--border:rgba(196,210,230,.10);--border2:rgba(196,210,230,.17);--text:#f4f7fb;--dim:rgba(226,234,245,.66);--faint:rgba(226,234,245,.38);--red:#ef3340;--red-dim:rgba(239,51,64,.14);--red-hover:#ff4652}
+#btn-row{height:calc(60px + env(safe-area-inset-bottom,0px));padding:0 14px env(safe-area-inset-bottom,0px);gap:12px;background:linear-gradient(180deg,rgba(19,26,36,.98),rgba(13,18,26,.99));border-top:1px solid rgba(196,210,230,.14);box-shadow:0 -10px 28px rgba(0,0,0,.24)}
+#stream-btns{gap:8px;min-width:max-content}.row-divider{height:28px;background:rgba(196,210,230,.18);margin:0 2px}
+.s-btn{position:relative;gap:8px;height:40px;padding:0 12px;border:1px solid rgba(196,210,230,.15);border-radius:10px;background:linear-gradient(180deg,rgba(34,43,56,.88),rgba(24,32,43,.96));color:rgba(233,239,248,.78);font-size:12px;font-weight:650;letter-spacing:.005em;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 2px 8px rgba(0,0,0,.14);transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease}
+.s-btn:hover{background:linear-gradient(180deg,#293547,#202b39);color:#fff;border-color:rgba(196,210,230,.29);box-shadow:0 5px 14px rgba(0,0,0,.24);transform:translateY(-1px)}.s-btn:active{transform:scale(.98)}
+.s-btn.active{color:#fff;background:linear-gradient(180deg,rgba(239,51,64,.20),rgba(239,51,64,.12));border-color:rgba(239,82,92,.55);box-shadow:inset 0 0 0 1px rgba(239,51,64,.08),0 3px 12px rgba(239,51,64,.10)}
+.s-btn.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;border-radius:2px;background:var(--red);box-shadow:0 0 10px rgba(239,51,64,.55)}
+.s-btn .health-dot{width:14px;height:11px;opacity:.92}.s-btn .s-thumb{width:23px;height:23px;border-radius:6px;border:1px solid rgba(255,255,255,.12)}.s-btn .s-icon{font-size:14px}.s-btn .s-name{max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.s-format{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;min-width:40px;height:20px;padding:0 6px;border-radius:6px;background:rgba(81,186,255,.11);border:1px solid rgba(81,186,255,.19);color:#9bd7ff;font-size:9px;font-weight:800;letter-spacing:.075em;line-height:1}
+.s-btn[data-protocol="mpd"] .s-format{background:rgba(249,185,72,.11);border-color:rgba(249,185,72,.22);color:#ffd17d}.s-btn[data-protocol="embed"] .s-format{background:rgba(190,202,220,.09);border-color:rgba(190,202,220,.14);color:#c1ccda}.s-btn.active .s-format{filter:brightness(1.16)}
+#row-controls{gap:7px}.r-btn{height:38px;min-width:38px;padding:0 11px;gap:7px;border-radius:10px;border:1px solid rgba(196,210,230,.13);background:rgba(255,255,255,.045);color:rgba(226,234,245,.72);font-size:11px;font-weight:650;box-shadow:inset 0 1px 0 rgba(255,255,255,.025);transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease}
+.r-btn:hover{background:rgba(255,255,255,.095);border-color:rgba(196,210,230,.26);color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.18)}.r-btn:active{transform:scale(.97)}.r-btn svg{width:15px;height:15px}.r-btn.active-toggle{background:rgba(65,164,255,.13);border-color:rgba(65,164,255,.34);color:#a9d9ff}
+.r-btn.tg{color:#79caff;border-color:rgba(61,180,242,.24)}.r-btn.wa{color:#7ce5a2;border-color:rgba(37,211,102,.23)}.r-btn.donate{color:#ff9aa5;border-color:rgba(255,107,129,.23)}.r-btn.tg:hover,.r-btn.wa:hover,.r-btn.donate:hover{color:#fff}
+#qual-sel{height:38px;min-width:76px;padding:0 27px 0 11px;border-radius:10px;border:1px solid rgba(196,210,230,.17);background-color:#19222e;color:#e7edf5;font-size:11px;font-weight:700;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}#qual-sel:hover,#qual-sel:focus{border-color:rgba(239,51,64,.42);background-color:#202b39}
+#btn-fullscreen{color:#fff;background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.19)}#btn-fullscreen:hover{background:rgba(255,255,255,.15)}#btn-row :is(button,a,select):focus-visible{outline:2px solid #ff6570;outline-offset:2px}
+html.po body #app #btn-row{background:rgba(13,18,26,.96)!important;border-top-color:rgba(196,210,230,.15)!important}
+.plyr--video{--plyr-color-main:#ef3340;--plyr-control-radius:8px}.plyr__controls{padding:34px 18px 16px!important;gap:6px!important;background:linear-gradient(to top,rgba(0,0,0,.88),rgba(0,0,0,.30) 62%,transparent)!important}.plyr__controls .plyr__controls__item{border-radius:8px!important}.plyr__control--overlaid{box-shadow:0 8px 34px rgba(239,51,64,.32)!important}.plyr__menu__container{backdrop-filter:blur(16px)!important}
+@media(max-width:700px){#btn-row{height:calc(56px + env(safe-area-inset-bottom,0px));padding-left:10px;padding-right:10px;gap:9px}.s-btn{height:38px;padding:0 10px;gap:7px}#row-controls{gap:6px}.r-btn,#qual-sel{height:36px}html.po body #app #stage{bottom:calc(56px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 56px - env(safe-area-inset-bottom,0px))!important}html.po body #app.embed-mode #embed-host{bottom:calc(56px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 56px - env(safe-area-inset-bottom,0px))!important}}
+@media(max-width:480px){#btn-row{height:calc(52px + env(safe-area-inset-bottom,0px));padding-left:8px;padding-right:8px;gap:7px}#stream-btns{gap:6px}.s-btn{height:36px;padding:0 9px;font-size:11px;gap:6px}.s-btn .s-name{max-width:130px}.s-format{min-width:30px;height:18px;font-size:8px}.r-btn{height:36px;min-width:36px;padding:0 9px}.r-btn .r-label{display:none}#qual-sel{height:36px;min-width:68px;padding-left:9px}html.po body #app #stage{bottom:calc(52px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 52px - env(safe-area-inset-bottom,0px))!important}html.po body #app.embed-mode #embed-host{bottom:calc(52px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 52px - env(safe-area-inset-bottom,0px))!important}}
+@media(max-width:360px){.s-btn .s-icon{display:none}.s-btn .s-name{max-width:105px}.s-format{min-width:28px;padding:0 4px}#row-controls{gap:5px}.r-btn{min-width:34px;padding:0 8px}}
+@media(prefers-reduced-motion:reduce){.s-btn,.r-btn{transition:none!important}}
+html.po body #app #stage{bottom:calc(60px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 60px - env(safe-area-inset-bottom,0px))!important}html.po body #app.embed-mode #embed-host{bottom:calc(60px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 60px - env(safe-area-inset-bottom,0px))!important}
+
 </style>
 </head>
 <body>
@@ -255,6 +359,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
   <div id="offline-banner" role="status" aria-live="polite"><span>📶</span><span>Waiting for connection…</span></div>
   <div id="stage">
     <div id="thumb-bg"></div>
+    <div id="ambient-glow" aria-hidden="true"></div>
+    <div id="channel-mark" aria-hidden="true"></div>
+    <div id="sr-status" class="sr-only" aria-live="polite"></div>
     <div id="init-ph"><p>Initializing…</p></div>
     <div id="player-host"></div>
     <div id="embed-host">
@@ -265,8 +372,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
       </div>
       <iframe id="embed-frame"
         allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share; accelerometer; gyroscope"
-        referrerpolicy="no-referrer-when-downgrade"
-        sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation"
+        referrerpolicy="strict-origin-when-cross-origin"
+        sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
         allowfullscreen></iframe>
       <div id="embed-err" role="alertdialog" aria-live="assertive">
         <div class="ee-icon" id="ee-icon">📡</div>
@@ -283,7 +390,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
     <div id="latency-badge"></div>
     <button type="button" id="jump-live-btn">⚡ Jump to Live</button>
     <div id="live-badge"><span class="live-dot"></span><span id="live-lbl">LIVE</span></div>
-    <div id="tap-play" aria-hidden="true">
+    <button type="button" id="btn-switch-stream" aria-label="Switch to next stream" tabindex="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg><span id="switch-stream-label">Switch · Stream</span></button>
+    <div id="tap-play">
       <button type="button" id="tap-play-btn">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
         Tap to Play
@@ -305,6 +413,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
         <div class="err-acts">
           <button type="button" class="err-btn retry" id="btn-retry">↺ Try Again</button>
           <button type="button" class="err-btn sec" id="btn-fallback">Use Backup</button>
+          <button type="button" class="err-btn sec" id="btn-reload" style="display:none">Reload</button>
         </div>
         <div class="err-retries" id="err-retries"></div>
       </div>
@@ -335,6 +444,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
         </div>
         <button type="button" class="sc-close" id="sc-close-btn">Close</button>
       </div>
+    </div>
+    <div id="stats-overlay" role="dialog" aria-modal="true" aria-labelledby="stats-ttl">
+      <div class="sc-box"><div class="sc-ttl" id="stats-ttl">Stats for nerds</div><div class="sc-grid" id="stats-grid"></div><button type="button" class="sc-close" id="stats-close">Close</button></div>
     </div>
     <div id="float-join" class="expanded">
       <a class="fj-btn tg" data-t="telegram" href="https://t.me/sport803s" target="_blank" rel="noopener noreferrer" aria-label="Join our Telegram channel">
@@ -389,6 +501,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
         <span class="r-label">Full</span>
       </button>
+      <button type="button" class="r-btn" id="btn-cast" title="Cast" style="display:none">↗<span class="r-label">Cast</span></button>
       <button type="button" class="r-btn" id="btn-pip" title="PiP (P)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><rect x="13" y="11" width="9" height="8" rx="1"/></svg>
         <span class="r-label">PiP</span>
@@ -400,31 +513,33 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
   </div>
 </div>
 
+<!-- ══ PLAYER-ONLY MODE: must run BEFORE the main player script ══ -->
+<script>
+(function(){
+  var app=document.getElementById('app');
+  var forceUi=/[?&]ui=1\b/i.test(location.search);
+  var isPlayerPath=/\/p\/player\.html/i.test(location.pathname);
+  if(!app||!isPlayerPath||forceUi)return;
+  document.documentElement.classList.add('po');
+  if(app.parentNode!==document.body)document.body.appendChild(app);
+  // keep hiding anything the theme injects later (floating buttons, widgets, ads)
+  new MutationObserver(function(){
+    Array.prototype.forEach.call(document.body.children,function(n){
+      if(n!==app&&n.tagName!=='SCRIPT'&&n.tagName!=='STYLE'&&!/(^|\s)(plyr|jw|vjs|video-js|shaka|sp-keep)/i.test(n.className||''))n.style.setProperty('display','none','important');
+    });
+  }).observe(document.body,{childList:true});
+})();
+</script>
+
 <script>
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Live Stream Player — hardened build (v3)
-   ───────────────────────────────────────────────────────────────────────────
-   v2 fixes: dead showError, Safari lookbehind, retry counter reset, iframe
-   clone false-load, keyboard focus escape, fallback button, DRM adapter
-   filter, autoplay block, health monitor math, XSS in score overlay,
-   sendBeacon duplication, TDZ guards, Plyr double-destroy, and 30 others.
-
-   v3 fixes: DOMParser-based extraction so commented-out <script> blocks on
-   Blogger/Blogspot pages (like live.samuraitv.biz.id) can no longer leak
-   stale manifest URLs into the active source list. Adds proper handling of
-   Shaka `<script>…const streamUrl = "…mpd"…&lt;/script&gt;` and clearKeys block,
-   including newline-separated forms. Regex comment stripper retained only as
-   a fallback for non-DOMParser environments.
-
-   v4 fixes (signed-url): Tencent-Cloud-style signed URLs (txSecret/txTime,
-   wsSecret/wsTime, auth_key, sign, expire, e) are now passed through byte-
-   for-byte end to end — no proxying, no adapter cascade beyond hls.js /
-   native-hls, no URL mutation — matching the behaviour of the reference
-   DPlayer + hls.js build. See every `// [signed-url]` comment below.
+   Live Stream Player — hardened build (v4, signed-url aware, player-only)
    ═══════════════════════════════════════════════════════════════════════════ */
 
+const DEBUG = /[?&]debug=1\b/i.test(location.search);
+const LOG = (...a) => { if (DEBUG) console.log('[player]', ...a); };
 const _ooe = window.onerror;
 window.onerror = function(msg, src, l, c, e) {
   if (['owlCarousel','replaceText','__cmp','googletag'].some(s => String(msg).includes(s))) return true;
@@ -438,13 +553,13 @@ window.addEventListener('unhandledrejection', e => {
 
 const SP = (() => {
 
-// [signed-url] Never let new URL()'s normalisation touch a playback string.
-// Detects Tencent-Cloud-style signed query params so downstream code can
-// take the raw-passthrough path instead of parsing/proxying/rewriting.
-const isSignedUrl = u => typeof u === 'string' &&
-  /([?&])(txSecret|txTime|wsSecret|wsTime|auth_key|sign|expire)=/i.test(u);
+// [signed-url] Detects Tencent-Cloud-style signed query params so downstream
+// code can take the raw-passthrough path instead of parsing/proxying URLs.
+const EDGE_SIGNED_RE = /([?&])(txSecret|txTime|wsSecret|wsTime|auth_key)=/i;
+const TOKEN_SIGNED_RE = /([?&])(sign|signature|token|expire|expires|md5|hash)=/i;
+const isSignedUrl = u => typeof u === 'string' && EDGE_SIGNED_RE.test(u);
 
-/* ── Config: all magic numbers centralized ── */
+/* ── Config ── */
 const CFG = {
   FALLBACK_URL: 'https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master_3360.m3u8',
   STORAGE_KEY: 'sp_idx',
@@ -453,17 +568,12 @@ const CFG = {
   PLAYER_TO: 14000, MAX_RETRY: 2, CTRL_FADE: 3000, GESTURE_T: 60,
   EMBED_TO: 15000, EMBED_HTO: 20000, EMBED_DEAD_PX: 50,
   AUTO_NEXT_DELAY: 5000,
-  HEALTH_INTERVAL: 15000, STALL_TICKS: 3, LATENCY_WARN: 15,
+  HEALTH_INTERVAL: 3000, STALL_TICKS: 3, LATENCY_WARN: 15,
   PROXY_TO: 9000, RESOLVE_TO: 9000, FETCH_TO: 8000, BATCH_BUDGET: 25000,
-  // [signed-url] Timeout used for player init when the stream URL carries a
-  // Tencent-Cloud-style signature. The 14s default kills cold-edge responses
-  // that the DPlayer reference build would simply wait out.
-  SIGNED_PLAYER_TO: 45000,
-  // Optional first-party proxy. Use {url} in the endpoint when it expects a
-  // placeholder; otherwise the encoded target is appended to the endpoint.
-  OWN_PROXY: '',
+  SIGNED_PLAYER_TO: 20000, START_DEADLINE: 10000, START_GRACE: 1500,
+  OWN_PROXY: 'https://billowing-surf-4ef1.streamworldcuplive.workers.dev/?url=',
   EVENT_SAMPLE_MS: 4000,
-  SANDBOX: 'allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation',
+  SANDBOX: 'allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-popups',
   PROXY: [
     u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
@@ -489,14 +599,21 @@ const streamLabel = i => {
   return lbl(i);
 };
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function getDeviceType() {
+  const ua = String(navigator.userAgent || '');
+  if (isIOS()) return 'ios';
+  if (/smart-tv|smarttv|tizen|webos|appletv|googletv|hbbtv|roku|firetv/i.test(ua)) return 'tv';
+  if (/android/i.test(ua)) return 'android';
+  return 'pc';
+}
 
-/* ── Hoisted state (var so early GA calls see 'undefined' not TDZ) ── */
+/* ── Hoisted state ── */
 var appState = 'idle';
 var curIdx = 0;
 var curStream = null;
 var curAdapter = '';
 var Perf = {
-  t0: Date.now(), pStart: null, goT: null, switches: 0, errors: 0,
+  t0: Date.now(), pStart: null, goT: null, switches: 0, errors: 0, bytes: 0, estimatedMbps: 0,
   sec() { return this.pStart ? Math.round((Date.now() - this.pStart) / 1000) : 0; }
 };
 
@@ -523,9 +640,6 @@ function safe(url) {
     if (m) { const [a, b] = [+m[1], +m[2]]; if (a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return false; }
     return true;
   } catch { return false; }
-  // [signed-url] `safe()` above only ever returns a boolean — it never
-  // hands back `p.href` or any mutated form of the URL, so signed query
-  // strings passed in here are never normalised away by this check.
 }
 
 function normalizeStreamUrl(raw) {
@@ -554,16 +668,16 @@ const ThumbMgr = (() => {
   return { init, show, hide };
 })();
 
-/* ── GA4 (sampled high-frequency events, snapshotted dims, no hand-rolled beacon) ── */
+/* ── GA4 ── */
 const GA = (() => {
   const _t0 = Date.now();
   let _visibleMs = 0, _lastVisibleAt = Date.now(), _hidden = false;
   let _firstPlayAt = null;
-  const MILESTONES = [30, 60, 180, 300, 600, 1800];
+  const MILESTONES = [10, 30, 60, 180, 300, 600, 900, 1800];
   const _milestonesSent = new Set();
   let _milestoneTimer = null, _volTimer = null, _lastVol = -1, _bufferStart = null;
   const _lastSent = new Map();
-  let _dimsSnapshot = null;
+  let _sessionEndSent = false, _sessionEndTimer = null;
 
   function _volBucket(v) { if (v === 0) return 'muted'; if (v <= 25) return '1-25'; if (v <= 50) return '26-50'; if (v <= 75) return '51-75'; return '76-100'; }
   function _sessionSec() { return Math.round((Date.now() - _t0) / 1000); }
@@ -571,13 +685,9 @@ const GA = (() => {
   function _device() { const ua = navigator.userAgent; if (/tablet|ipad/i.test(ua)) return 'tablet'; if (/mobile|android|iphone/i.test(ua)) return 'mobile'; return 'desktop'; }
   function _conn() { const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection; if (!c) return 'unknown'; return c.effectiveType || c.type || 'unknown'; }
   function _dims() {
-    if (_dimsSnapshot) return _dimsSnapshot;
-    return { stream_index: 0, stream_name: 'none', adapter_name: 'none', stream_type: 'none', app_state: 'idle' };
-  }
-  function snapshotDims() {
-    _dimsSnapshot = {
+    return {
       stream_index: curIdx + 1,
-      stream_name: streamLabel(curIdx).name,
+      stream_name: curStream ? streamLabel(curIdx).name : 'none',
       adapter_name: curAdapter || 'none',
       stream_type: curStream ? (curStream.type || 'unknown') : 'none',
       app_state: appState,
@@ -586,9 +696,11 @@ const GA = (() => {
       connection: _conn(),
     };
   }
+  function snapshotDims() {}
   function send(eventName, extra = {}) {
+    if (DEBUG && /^xoilac_/.test(eventName)) console.log('[GA]', eventName, extra);
     try { gtag('event', eventName, { ..._dims(), session_sec: _sessionSec(), visible_sec: _visibleSec(), ...extra }); }
-    catch (e) { console.warn('[GA]', eventName, e); }
+    catch (e) { LOG('[GA]', eventName, e); }
   }
   function sendSampled(eventName, key, extra = {}, minMs = CFG.EVENT_SAMPLE_MS) {
     const now = Date.now();
@@ -603,14 +715,21 @@ const GA = (() => {
     else { _hidden = false; _lastVisibleAt = now; send('tab_visible'); }
   });
 
-  // No manual sendBeacon — gtag config uses transport_type:'beacon'.
-  window.addEventListener('beforeunload', () => {
+  function sendSessionEnd() {
+    if (_sessionEndSent) return;
+    _sessionEndSent = true;
     send('session_end', {
       session_sec: _sessionSec(), visible_sec: _visibleSec(), watch_sec: Perf.sec(),
       total_switches: Perf.switches, total_errors: Perf.errors,
       final_stream_index: curIdx + 1, final_adapter: curAdapter || 'none',
     });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { clearTimeout(_sessionEndTimer); _sessionEndTimer = setTimeout(sendSessionEnd, 300); }
+    else { clearTimeout(_sessionEndTimer); _sessionEndSent = false; } // returning to the tab re-arms session_end
   });
+  window.addEventListener('beforeunload', sendSessionEnd);
+  window.addEventListener('pagehide', sendSessionEnd);
 
   function _tickMilestone() {
     if (!Perf.pStart) return;
@@ -652,6 +771,7 @@ const GA = (() => {
     v.addEventListener('volumechange', () => { const vol = Math.round(v.volume * 100); trackVolume(v.muted ? 0 : vol, 'video_control'); });
   }
 
+  // GA dimensions are evaluated at emission time; stream_index is always 1-based.
   return { send, sendSampled, trackVolume, attachVideo, startMilestones, stopMilestones, snapshotDims };
 })();
 
@@ -671,14 +791,15 @@ const D = {
   errTtl: document.getElementById('err-ttl'), errMsg: document.getElementById('err-msg'),
   errHint: document.getElementById('err-hint'), errRetries: document.getElementById('err-retries'),
   fbCountdown: document.getElementById('fb-countdown'), btnRetry: document.getElementById('btn-retry'),
-  btnFallback: document.getElementById('btn-fallback'), liveBadge: document.getElementById('live-badge'),
+  btnFallback: document.getElementById('btn-fallback'), btnReload: document.getElementById('btn-reload'), liveBadge: document.getElementById('live-badge'),
   liveLbl: document.getElementById('live-lbl'), toast: document.getElementById('toast'),
   gHint: document.getElementById('g-hint'), pbBar: document.getElementById('pb-bar'),
   volSl: document.getElementById('vol-sl'), qualSel: document.getElementById('qual-sel'),
   streamBtns: document.getElementById('stream-btns'), btnRow: document.getElementById('btn-row'),
   initPh: document.getElementById('init-ph'), scOverlay: document.getElementById('sc-overlay'),
-  scCloseBtn: document.getElementById('sc-close-btn'), btnRefresh: document.getElementById('btn-refresh'),
-  btnFullscreen: document.getElementById('btn-fullscreen'), btnPip: document.getElementById('btn-pip'),
+  scCloseBtn: document.getElementById('sc-close-btn'),
+  statsOverlay: document.getElementById('stats-overlay'), statsGrid: document.getElementById('stats-grid'), statsClose: document.getElementById('stats-close'), btnRefresh: document.getElementById('btn-refresh'),
+  btnFullscreen: document.getElementById('btn-fullscreen'), btnPip: document.getElementById('btn-pip'), btnCast: document.getElementById('btn-cast'), btnSwitch: document.getElementById('btn-switch-stream'), switchLabel: document.getElementById('switch-stream-label'),
   btnHelp: document.getElementById('btn-help'), pbFsBtn: document.getElementById('pb-fs-btn'),
   scoreOverlay: document.getElementById('score-overlay'), latencyBadge: document.getElementById('latency-badge'),
   jumpLiveBtn: document.getElementById('jump-live-btn'), offlineBanner: document.getElementById('offline-banner'),
@@ -689,8 +810,28 @@ const D = {
 /* ── Playback state ── */
 let playGen = 0, retryCount = 0;
 let ctrlTimer = null, toastTimer = null, gTimer = null, swTimer = null, autoNextTimer = null;
+let failStreak = 0;
+const failedStreams = new Set();
+const lastSwitchTimes = [];
+let lastPlayTrigger = 'initial';
+const maxFailStreak = () => Math.max(3, streams.length * 2);
 let streams = [], curPlayer = null, curPlyr = null, instances = [];
 const destroyed = new WeakSet();
+const WakeMgr = (() => {
+  let lock = null;
+  async function on() {
+    try {
+      if (lock || !('wakeLock' in navigator) || document.hidden) return;
+      lock = await navigator.wakeLock.request('screen');
+      lock.addEventListener('release', () => { lock = null; });
+    } catch {}
+  }
+  function off() { try { lock?.release(); } catch {} lock = null; }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && appState === 'playing') on(); });
+  return { on, off };
+})();
+const streamSig = text => { let h = 0; for (const c of String(text)) h = (h * 31 + c.charCodeAt(0)) | 0; return h; };
+const listSig = () => streamSig(streams.map(s => s?.originalUrl || s?.url || '').join('|'));
 
 /* ── User Preference Memory ── */
 const Prefs = (() => {
@@ -701,19 +842,31 @@ const Prefs = (() => {
     load, save,
     getLowData: () => _lowData,
     setLowData: v => { _lowData = v; save('sp_lowdata', v); },
-    getSavedVol: () => load('sp_vol', 100),
-    setSavedVol: v => save('sp_vol', v),
-    getSavedMute: () => load('sp_mute', false),
-    setSavedMute: v => save('sp_mute', v),
+    getSavedVol: (idx = null) => load(idx === null ? 'sp_vol_default' : `sp_vol_${idx}`, load('sp_vol_default', 100)),
+    setSavedVol: (idx, v) => { save(idx === null ? 'sp_vol_default' : `sp_vol_${idx}`, v); if (idx !== null) save('sp_vol_default', v); },
+    getSavedMute: (idx = null) => load(idx === null ? 'sp_mute_default' : `sp_mute_${idx}`, load('sp_mute_default', false)),
+    setSavedMute: (idx, v) => { save(idx === null ? 'sp_mute_default' : `sp_mute_${idx}`, v); if (idx !== null) save('sp_mute_default', v); },
   };
 })();
 
 (() => {
-  const savedVol = Prefs.getSavedVol();
-  const savedMute = Prefs.getSavedMute();
+  const savedVol = Prefs.getSavedVol(curIdx);
+  const savedMute = Prefs.getSavedMute(curIdx);
   D.volSl.value = String(savedMute ? 0 : savedVol);
+  if (navigator.connection?.saveData && !Prefs.getLowData()) Prefs.setLowData(true);
   if (Prefs.getLowData()) D.btnLowdata.classList.add('active-toggle');
+  const conn = navigator.connection;
+  let autoLow = false; // only auto-disable Low Data if we enabled it automatically
+  const applyConnectionMode = () => {
+    const slow = conn && /^(slow-2g|2g)$/.test(conn.effectiveType || '');
+    if (slow && !Prefs.getLowData()) { autoLow = true; Prefs.setLowData(true); D.btnLowdata.classList.add('active-toggle'); GA.send('perf_lowdata_auto_on', { effective_type: conn.effectiveType }); }
+    else if (conn && /^(4g|wifi)$/.test(conn.effectiveType || '') && autoLow && Prefs.getLowData() && !conn.saveData) { autoLow = false; Prefs.setLowData(false); D.btnLowdata.classList.remove('active-toggle'); GA.send('perf_lowdata_auto_off', { effective_type: conn.effectiveType }); }
+  };
+  applyConnectionMode();
+  conn?.addEventListener?.('change', applyConnectionMode);
 })();
+document.addEventListener('visibilitychange', () => document.documentElement.classList.toggle('bg-quiet', document.hidden));
+document.addEventListener('freeze', () => document.documentElement.classList.add('bg-quiet'));
 
 /* ── Offline Awareness ── */
 let _isOnline = navigator.onLine, _offlineResumeNeeded = false;
@@ -725,13 +878,19 @@ window.addEventListener('offline', handleOffline);
 if (!_isOnline) setOfflineBanner(true);
 
 /* ── Params ── */
-// URLSearchParams cannot be used for stream values because signed URLs contain
-// their own query parameters. Only the known player keys are separators.
-// [signed-url] 'liveUrl' added so ?liveUrl=<encoded> (DPlayer-style) is
-// recognised as a raw stream source, same as the reference build.
-const RAW_PARAM_KEYS = ['liveUrl','mora','embed','one','xoilac','data','drmkey','referer','thumb','team1','team2','league','score','clock'];
+const RAW_PARAM_KEYS = ['liveUrl','mora','embed','one','xoilac','data','drmkey','referer','thumb','team1','team2','league','score','clock','m','autoplay','debug'];
 function parseRawParams() {
   const raw = String(location.search || '').replace(/^\?/, '');
+  if (raw && !/https?:\/\//i.test(raw)) {
+    const out = Object.create(null);
+    try {
+      new URLSearchParams(raw).forEach((value, key) => {
+        const k = String(key || '').toLowerCase();
+        if (RAW_PARAM_KEYS.some(x => x.toLowerCase() === k)) (out[k] ||= []).push(normalizeStreamUrl(value));
+      });
+      if (Object.keys(out).length) return out;
+    } catch {}
+  }
   const out = Object.create(null);
   const re = new RegExp('(?:^|&)(' + RAW_PARAM_KEYS.join('|') + ')(?:=|$)', 'gi');
   const hits = [];
@@ -741,9 +900,6 @@ function parseRawParams() {
     const h = hits[i];
     const end = i + 1 < hits.length ? hits[i + 1].matchStart : raw.length;
     const value = raw.slice(h.start, Math.max(h.start, end));
-    // [signed-url] DPlayer-style double decode — tolerant of %26/%3D/%2F,
-    // matching the reference build's decodeURI-then-decodeURIComponent
-    // handling so a signed URL's own encoded query string survives intact.
     let decoded = value;
     try { decoded = decodeURI(value); } catch {}
     try { decoded = decodeURIComponent(decoded); } catch {}
@@ -760,23 +916,54 @@ function decodeData() {
   } catch { return null; }
 }
 function getP(name) {
+  const k = String(name || '').toLowerCase();
   const d = decodeData();
   if (d && d[name]) return (Array.isArray(d[name]) ? d[name] : [d[name]]).map(normalizeStreamUrl);
-  return RAW_PARAMS[name] || [];
+  if (d && d[k]) return (Array.isArray(d[k]) ? d[k] : [d[k]]).map(normalizeStreamUrl);
+  return RAW_PARAMS[k] || [];
 }
 function getRawP(name) { return RAW_PARAMS[name]?.[0] || ''; }
-const moraP = getP('mora').filter(safe);
-const liveUrlP = getP('liveUrl').filter(safe);
+function expandMediaParam(raw) {
+  let value = normalizeStreamUrl(raw);
+  if (!value) return [];
+  // Query parsers turn an unescaped base64 '+' into a space; restore it only
+  // for a base64-looking non-URL value before attempting nested decoding.
+  if (!/^https?:\/\//i.test(value) && /^[A-Za-z0-9_\-/=\s+]+$/.test(value)) value = value.replace(/ /g, '+');
+  const decoded = decodeNestedValue(value, !/^https?:\/\//i.test(value));
+  const roots = [value, decoded].filter((v, i, a) => v && a.indexOf(v) === i && safe(v));
+  const media = roots.flatMap(root => extractNestedMediaUrls(root));
+  // Keep wrappers behind HLS: iOS may detect the signed manifest but reject it
+  // due to provider origin/referrer policy, while the provider iframe can play.
+  if (media.length) return [...new Set([...media, ...roots])];
+  return roots;
+}
+const moraP = getP('mora').flatMap(expandMediaParam).filter(safe);
+const liveUrlP = getP('liveUrl').flatMap(expandMediaParam).filter(safe);
 const embedP = getP('embed').filter(safe);
 const oneP = getP('one').filter(safe);
 const xoilacP = getP('xoilac').filter(safe);
+const Prefetch = (() => {
+  const warmed = new Set();
+  function origin(url) { try { return new URL(url).origin; } catch { return ''; } }
+  function preconnect(url) {
+    const o = origin(url); if (!o || warmed.has(o)) return; warmed.add(o);
+    for (const rel of ['preconnect','dns-prefetch']) { const l=document.createElement('link'); l.rel=rel; l.href=o; document.head.appendChild(l); }
+  }
+  async function manifest(url) {
+    if (!safe(url) || isSignedUrl(url) || /\.mpd(?:[?#&]|$)/i.test(url) && drmKP) return;
+    const t=Date.now(); const ac=new AbortController(); const timer=setTimeout(()=>ac.abort(),3000);
+    try { await fetch(url,{method:'HEAD',mode:'no-cors',signal:ac.signal,cache:'no-store'}); GA.send('perf_manifest_warm', { url: url.slice(0,120), ms: Date.now()-t }); } catch {} finally { clearTimeout(timer); }
+  }
+  return { preconnect, manifest };
+})();
+[...moraP, ...liveUrlP, ...oneP, ...xoilacP].slice(0,3).forEach(Prefetch.preconnect);
 const drmKP = getRawP('drmkey').trim();
-const refP = getRawP('referer').trim();
+const refP = getRawP('referer').trim() || (xoilacP.length ? 'https://xlz.domainkqt.cc/' : '');
 const scoreTeam1 = getRawP('team1').trim();
 const scoreTeam2 = getRawP('team2').trim();
 const scoreLeague = getRawP('league').trim();
 const scoreManual = { score: getRawP('score'), clock: getRawP('clock'), league: getRawP('league') };
-  console.info('[player] parsed stream URLs', { mora: moraP, embed: embedP, one: oneP, xoilac: xoilacP, liveUrl: liveUrlP });
+LOG('[player] parsed stream URLs', { mora: moraP, embed: embedP, one: oneP, xoilac: xoilacP, liveUrl: liveUrlP });
 
 /* ── Toast / Banner ── */
 function toast(msg, dur = 2400) { clearTimeout(toastTimer); D.toast.textContent = msg; D.toast.classList.add('show'); toastTimer = setTimeout(() => D.toast.classList.remove('show'), dur); }
@@ -817,42 +1004,71 @@ function setLoading(on, txt = 'Loading stream…', pct) {
   if (on) ThumbMgr.show(); else if (appState === 'playing') ThumbMgr.hide();
 }
 
-/* ── Tap-to-play (autoplay rejection) ── */
-function showTapToPlay() { D.tapPlay.classList.add('on'); D.tapPlay.setAttribute('aria-hidden', 'false'); }
-function hideTapToPlay() { D.tapPlay.classList.remove('on'); D.tapPlay.setAttribute('aria-hidden', 'true'); }
-D.tapPlayBtn.addEventListener('click', async () => {
+/* ── Tap-to-play ── */
+function showTapToPlay() { D.tapPlay.classList.add('on'); }
+function hideTapToPlay() { D.tapPlay.classList.remove('on'); }
+async function togglePlayback() {
+  const wasTap = D.tapPlay.classList.contains('on');
   hideTapToPlay();
-  if (curPlayer instanceof HTMLMediaElement) { try { curPlayer.muted = false; await curPlayer.play(); } catch {} }
-});
-D.tapPlay.addEventListener('click', e => { if (e.target === D.tapPlay) D.tapPlayBtn.click(); });
+  try {
+    if (wasTap) {
+      if (curPlyr) { curPlyr.muted = false; await curPlyr.play(); return; }
+      if (curPlayer instanceof HTMLMediaElement) { curPlayer.muted = false; await curPlayer.play(); return; }
+    }
+    if (curPlyr?.playing) { curPlyr.pause(); return; }
+    if (curPlyr?.play) { await curPlyr.play(); return; }
+    if (curPlayer?.play) { if (curPlayer instanceof HTMLMediaElement) curPlayer.muted = false; await curPlayer.play(); return; }
+    if (D.embedFrame?.contentWindow) D.embedFrame.contentWindow.postMessage({ type: 'sp:play' }, '*');
+  } catch {}
+}
+D.tapPlay.addEventListener('click', () => togglePlayback());
 
 /* ── Smart next-index ── */
 function getNextPreferredIndex(current) {
   if (!streams.length) return 0;
+  const untried = streams.filter((_, i) => !failedStreams.has(i));
+  const skipFailed = untried.length > 0;
   let next = (current + 1) % streams.length;
-  if (isIOS()) {
-    let attempts = 0;
-    while (attempts < streams.length) {
-      const s = streams[next];
-      if (s && (s.type === 'hls' || s.type === 'embed')) return next;
-      next = (next + 1) % streams.length; attempts++;
-    }
-    return (current + 1) % streams.length;
+  for (let attempts = 0; attempts < streams.length; attempts++) {
+    const st = streams[next];
+    const compatible = !isIOS() || st?.type === 'hls' || st?.type === 'embed';
+    if (st && compatible && (!skipFailed || !failedStreams.has(next))) return next;
+    next = (next + 1) % streams.length;
   }
-  return next;
+  return (current + 1) % streams.length;
 }
 
+function noteSilentSwitch() {
+  const now = Date.now();
+  while (lastSwitchTimes[0] && now - lastSwitchTimes[0] > 20000) lastSwitchTimes.shift();
+  lastSwitchTimes.push(now);
+  // Permit a full pass through resolved candidates; failedStreams prevents loops.
+  return lastSwitchTimes.length <= Math.max(3, streams.length);
+}
+function silentFailover(trigger, reason = 'stream_failed') {
+  if (streams.length <= 1 || !noteSilentSwitch()) return false;
+  const untriedOther = streams.some((_, i) => i !== curIdx && !failedStreams.has(i));
+  if (!untriedOther) return false;
+  const next = getNextPreferredIndex(curIdx);
+  if (next === curIdx || failedStreams.has(next)) return false;
+  failedStreams.add(curIdx);
+  GA.send('silent_failover', { from_index: curIdx + 1, from_adapter: reason, reason: trigger });
+  switchNext(trigger);
+  return true;
+}
 /* ── Auto-switch countdown ── */
 function startAutoNextSwitch() {
+  if (failStreak >= maxFailStreak()) {
+    D.errRetries.textContent = 'All sources failed. Tap Try Again or reload.';
+    return;
+  }
   clearTimeout(autoNextTimer);
   D.fbCountdown.classList.remove('running');
-  D.fbCountdown.style.transition = 'none';
-  D.fbCountdown.style.transform = 'scaleX(0)';
   void D.fbCountdown.offsetWidth;
-  D.fbCountdown.style.transition = `transform ${CFG.AUTO_NEXT_DELAY}ms linear`;
-  D.fbCountdown.style.transform = 'scaleX(1)';
+  D.fbCountdown.classList.add('running');
   GA.send('auto_next_started', { delay_sec: CFG.AUTO_NEXT_DELAY / 1000, retry_count: retryCount });
   autoNextTimer = setTimeout(() => {
+    autoNextTimer = null;
     if (appState === 'error') {
       const fallbackIdx = streams.findIndex(s => s.isFallback);
       if (streams.length > 1 && fallbackIdx !== curIdx) {
@@ -868,13 +1084,13 @@ function startAutoNextSwitch() {
 function cancelAutoNextSwitch(reason = 'user') {
   if (!autoNextTimer) return;
   clearTimeout(autoNextTimer); autoNextTimer = null;
-  D.fbCountdown.style.transition = 'none';
-  D.fbCountdown.style.transform = 'scaleX(0)';
+  D.fbCountdown.classList.remove('running');
   GA.send('auto_next_cancelled', { cancel_reason: reason });
 }
 
 /* ── Error panel ── */
 function showError(rawErr = '') {
+  failStreak++;
   GA.stopMilestones();
   hideTapToPlay();
   Perf.errors++;
@@ -895,6 +1111,8 @@ function showError(rawErr = '') {
     D.errRetries.textContent = rem > 0
       ? `${rem} attempt${rem !== 1 ? 's' : ''} remaining — auto-switching in ${CFG.AUTO_NEXT_DELAY / 1000}s`
       : `Auto-switching to next stream in ${CFG.AUTO_NEXT_DELAY / 1000}s…`;
+  } else if (streams.length === 1 && fallbackIdx < 0) {
+    D.errRetries.textContent = 'Try again, or reload the page.';
   } else {
     D.errRetries.textContent = rem > 0
       ? `${rem} attempt${rem !== 1 ? 's' : ''} remaining — switching to backup in ${CFG.AUTO_NEXT_DELAY / 1000}s`
@@ -902,6 +1120,7 @@ function showError(rawErr = '') {
   }
   D.btnRetry.disabled = rem <= 0;
   D.btnFallback.style.display = fallbackIdx >= 0 && fallbackIdx !== curIdx ? '' : 'none';
+  D.btnReload.style.display = streams.length === 1 && fallbackIdx < 0 ? '' : 'none';
 
   D.errPanel.classList.add('active');
   appState = 'error';
@@ -910,7 +1129,7 @@ function showError(rawErr = '') {
   clearHost();
 
   GA.send('error_shown', {
-    error_title: f.ttl, error_raw: String(rawErr).slice(0, 150),
+    error_title: f.ttl, error_raw: String(rawErr).slice(0, 150), error_kind: classified.kind,
     retries_remaining: rem, watch_sec_before_error: Perf.sec(),
   });
   startAutoNextSwitch();
@@ -921,7 +1140,7 @@ document.addEventListener('error', e => {
   const media = e.target;
   if (!(media instanceof HTMLMediaElement) || !curStream || curStream.isFallback || appState !== 'playing') return;
   GA.send('runtime_media_error', { error_code: media.error?.code || 0, adapter_name: curAdapter });
-  showError('Runtime media playback error');
+  if (!silentFailover('silent_failover_runtime', `runtime_${media.error?.code || 0}`)) showError('Runtime media playback error');
 }, true);
 
 function hideError() {
@@ -953,17 +1172,19 @@ function updateMediaSession() {
 
 /* ── Quality selector ── */
 let qualH = null, _curQualLabel = 'Auto';
-function setQuality(items, handler) {
+let qualLowIndex = 0;
+function setQuality(items, handler, opts = {}) {
   const sel = D.qualSel;
   sel.innerHTML = '<option value="-1">Auto</option>';
-  if (!items || !items.length) { sel.classList.add('hidden'); qualH = null; return; }
-  items.forEach((item, i) => {
-    const o = document.createElement('option'); o.value = i; o.textContent = item.label; sel.appendChild(o);
-  });
+  if (!items || !items.length) { sel.classList.add('hidden'); qualH = null; qualLowIndex = 0; return; }
+  const normalized = items.map((item, i) => ({ ...item, _i: i, _rate: Number(item.bitrate ?? item.height ?? item.value ?? i) || i }))
+    .sort((a, b) => a._rate - b._rate);
+  qualLowIndex = Math.max(0, Math.min(opts.lowIndex ?? 0, normalized.length - 1));
+  normalized.forEach((item, i) => { const o = document.createElement('option'); o.value = i; o.textContent = item.label; sel.appendChild(o); });
   sel.classList.remove('hidden');
-  qualH = v => { if (items[v]) handler(items[v].value ?? v); else handler(v); };
-  if (Prefs.getLowData() && qualH) qualH(items.length - 1);
-  GA.send('quality_levels_available', { levels_count: items.length, levels_list: items.map(i => i.label).join(',') });
+  qualH = v => { if (normalized[v]) handler(normalized[v].value ?? normalized[v]._i); else handler(v); };
+  if (Prefs.getLowData() && qualH) { sel.value = String(qualLowIndex); qualH(qualLowIndex); }
+  GA.send('quality_levels_available', { levels_count: normalized.length, levels_list: normalized.map(i => i.label).join(',') });
 }
 function hideQuality() { D.qualSel.classList.add('hidden'); qualH = null; }
 D.qualSel.addEventListener('change', e => {
@@ -982,7 +1203,7 @@ D.btnLowdata.addEventListener('click', () => {
   D.btnLowdata.classList.toggle('active-toggle', newVal);
   toast(newVal ? 'Low data mode ON' : 'Low data mode OFF');
   if (newVal && qualH && D.qualSel.options.length > 1) {
-    const idx = D.qualSel.options.length - 2;
+    const idx = qualLowIndex;
     D.qualSel.value = String(idx);
     qualH(idx);
   }
@@ -992,14 +1213,19 @@ D.btnLowdata.addEventListener('click', () => {
 let btnEls = [];
 function buildBtns(list) {
   D.streamBtns.innerHTML = ''; btnEls = [];
-  if (!list || !list.length) { D.btnRow.classList.remove('visible'); return; }
+  if (!list || !list.length) { D.btnRow.classList.add('visible'); return; }
   list.forEach((s, i) => {
     const L = lbl(i);
     const label = s.customLabel || L.name;
+    const deviceSuffix = s.fromOneball
+      ? ` (${/\bP\d*\b/i.test(label) ? 'iOS' : ({ ios: 'iOS', android: 'Android', tv: 'TV', pc: 'PC' }[getDeviceType()])})`
+      : '';
+    const buttonLabel = label + deviceSuffix;
     const icon = s.type === 'embed' ? '📺' : L.icon;
     const btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 's-btn'; btn.dataset.i = i; btn.title = label;
-    btn.setAttribute('aria-label', `Stream ${i + 1}: ${label}`);
+    btn.type = 'button'; btn.className = 's-btn'; btn.dataset.i = i; btn.title = buttonLabel;
+    btn.dataset.protocol = s.type === 'dash' ? 'mpd' : s.type === 'hls' ? 'm3u8' : 'embed';
+    btn.setAttribute('aria-label', `Stream ${i + 1}: ${buttonLabel} · ${btn.dataset.protocol.toUpperCase()}`);
     btn.setAttribute('aria-pressed', 'false');
     const healthDot = document.createElement('span'); healthDot.className = 'health-dot grey'; btn.appendChild(healthDot);
     if (thumbP) {
@@ -1007,9 +1233,16 @@ function buildBtns(list) {
     } else {
       const iconSpan = document.createElement('span'); iconSpan.className = 's-icon'; iconSpan.textContent = icon; btn.appendChild(iconSpan);
     }
-    const nameSpan = document.createElement('span'); nameSpan.textContent = label; btn.appendChild(nameSpan);
+    const nameSpan = document.createElement('span'); nameSpan.className = 's-name'; nameSpan.textContent = buttonLabel; btn.appendChild(nameSpan);
+    const formatSpan = document.createElement('span');
+    formatSpan.className = 's-format';
+    formatSpan.textContent = s.type === 'dash' ? 'MPD' : s.type === 'hls' ? 'M3U8' : 'WEB';
+    formatSpan.setAttribute('aria-hidden', 'true');
+    btn.appendChild(formatSpan);
 
-    const openRaw = () => { if (s.url && safe(s.url)) window.open(s.url, '_blank', 'noopener,noreferrer'); };
+    btn._stream = s;
+    let _lastOpen = 0;
+    const openRaw = () => { const now = Date.now(); if (now - _lastOpen < 1500) return; _lastOpen = now; if (s.url && safe(s.url)) window.open(s.url, '_blank', 'noopener,noreferrer'); };
     btn.addEventListener('contextmenu', e => { e.preventDefault(); openRaw(); });
     let _lpt = null;
     btn.addEventListener('touchstart', () => { _lpt = setTimeout(openRaw, 600); }, { passive: true });
@@ -1017,15 +1250,41 @@ function buildBtns(list) {
     btn.addEventListener('touchmove', () => clearTimeout(_lpt), { passive: true });
     btn.addEventListener('click', () => {
       const idx = +btn.dataset.i;
-      if (idx !== curIdx) { GA.send('stream_button_clicked', { target_index: idx + 1, target_name: label, from_index: curIdx + 1, trigger_source: 'button' }); toast(`Switching to ${label}…`); go(idx); }
+      failStreak = 0;
+      const target = streams[idx] || btn._stream;
+      if (!target) { toast('Stream still loading…'); return; }
+      if (idx !== curIdx) { GA.send('stream_button_clicked', { target_index: idx + 1, target_name: label, from_index: curIdx + 1, trigger_source: 'button' }); toast(`Switching to ${label}…`); go(idx, target); }
     });
     D.streamBtns.appendChild(btn); btnEls.push(btn);
   });
   D.btnRow.classList.add('visible');
 }
-function setActivBtn(i) { btnEls.forEach((b, j) => { b.classList.toggle('active', j === i); b.setAttribute('aria-pressed', j === i ? 'true' : 'false'); }); }
-function setHealthDot(idx, color) { const btn = btnEls[idx]; if (!btn) return; const dot = btn.querySelector('.health-dot'); if (dot) dot.className = 'health-dot ' + color; }
+function setActivBtn(i) {
+  btnEls.forEach((b, j) => { b.classList.toggle('active', j === i); b.setAttribute('aria-pressed', j === i ? 'true' : 'false'); });
+  if (D.switchLabel) D.switchLabel.textContent = `Switch \u00b7 ${streamLabel(i).name}`;
+  if (D.btnSwitch) { const disabled = streams.length <= 1; D.btnSwitch.disabled = disabled; D.btnSwitch.classList.toggle('disabled', disabled); }
+}
+function updateLiveDot(color) { const dot = document.querySelector('.live-dot'); if (dot) dot.className = 'live-dot ' + (color || 'green'); }
+function announce(text) { const el = document.getElementById('sr-status'); if (el) { el.textContent = ''; setTimeout(() => { el.textContent = text; }, 20); } }
+function setChannelMark(stream) {
+  const el = document.getElementById('channel-mark'); if (!el) return;
+  const u = String(stream?.originalUrl || stream?.url || '').toLowerCase();
+  const name = /samuraitv\.biz\.id/.test(u) ? 'SamuraiTV' : /oneball\.live/.test(u) ? 'OneBall' : /kafeizhibo\.com/.test(u) ? 'KafeiTV' : '';
+  el.textContent = name; el.classList.toggle('on', !!name);
+} 
+D.btnSwitch?.addEventListener('click', () => {
+  GA.send('switch_stream_button_clicked', { from_index: curIdx + 1, from_name: streamLabel(curIdx).name });
+  failedStreams.clear(); lastSwitchTimes.length = 0; switchNext('button');
+});
+function pulseSwitchButton() { if (!D.btnSwitch) return; D.btnSwitch.classList.remove('pulse'); void D.btnSwitch.offsetWidth; D.btnSwitch.classList.add('pulse'); }
+function setHealthDot(idx, color) { const btn = btnEls[idx]; if (btn) { const dot = btn.querySelector('.health-dot'); if (dot) dot.className = 'health-dot ' + color; } if (idx === curIdx) updateLiveDot(color); }
 
+document.addEventListener('pointerdown', e => {
+  const btn = e.target.closest?.('.s-btn,.r-btn,.ee-btn'); if (!btn) return;
+  const r = btn.getBoundingClientRect(), ripple = document.createElement('span');
+  ripple.className = 'ripple'; ripple.style.left = `${e.clientX-r.left}px`; ripple.style.top = `${e.clientY-r.top}px`;
+  btn.appendChild(ripple); setTimeout(() => ripple.remove(), 520);
+});
 /* ── Overlay controls ── */
 function setOverlay(on) { if (on) D.stage.classList.add('has-ov'); else { D.stage.classList.remove('has-ov'); D.pbBar.classList.remove('on'); clearTimeout(ctrlTimer); } }
 D.stage.addEventListener('mousemove', () => {
@@ -1037,11 +1296,11 @@ D.volSl.addEventListener('input', e => {
   const v = Number(e.target.value) / 100;
   if (curPlyr) { try { curPlyr.volume = v; curPlyr.muted = (v === 0); } catch {} }
   else if (curPlayer instanceof HTMLMediaElement) { curPlayer.volume = v; curPlayer.muted = (v === 0); }
-  Prefs.setSavedVol(Math.round(v * 100)); Prefs.setSavedMute(v === 0);
+  Prefs.setSavedVol(curIdx, Math.round(v * 100)); Prefs.setSavedMute(curIdx, v === 0);
   GA.trackVolume(Math.round(v * 100), 'slider');
 });
 
-/* ── Player cleanup (destroyed-set guards Plyr double-destroy) ── */
+/* ── Player cleanup ── */
 function destroyInstance(p) {
   if (!p || destroyed.has(p)) return;
   destroyed.add(p);
@@ -1049,9 +1308,29 @@ function destroyInstance(p) {
     if (typeof p.destroy === 'function') p.destroy();
     else if (typeof p.dispose === 'function') p.dispose();
     else if (p instanceof HTMLMediaElement) { try { p.pause(); } catch {} p.removeAttribute('src'); try { p.load(); } catch {} }
-  } catch (e) { console.warn('[Cleanup]', e); }
+  } catch (e) { LOG('[Cleanup]', e); }
 }
+const AmbientGlow = (() => {
+  let timer = null, canvas = null;
+  function stop() { clearInterval(timer); timer = null; document.getElementById('ambient-glow')?.classList.remove('on'); }
+  function sample() {
+    const v = curPlayer;
+    if (document.hidden || !(v instanceof HTMLVideoElement) || curStream?.type === 'embed' || !v.videoWidth) return;
+    try {
+      canvas ||= document.createElement('canvas'); canvas.width = 16; canvas.height = 9;
+      const c = canvas.getContext('2d', { willReadFrequently: true }); c.drawImage(v, 0, 0, 16, 9);
+      const d = c.getImageData(0, 0, 16, 9).data; let r=0,g=0,b=0,n=0;
+      for (let i=0;i<d.length;i+=4) { r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++; }
+      const glow = document.getElementById('ambient-glow');
+      if (glow) { glow.style.background = `radial-gradient(ellipse at center, rgba(${Math.round(r/n)},${Math.round(g/n)},${Math.round(b/n)},.32), transparent 68%)`; glow.classList.add('on'); }
+    } catch { stop(); }
+  }
+  function start() { stop(); if (curStream?.type === 'embed') return; sample(); timer = setInterval(sample, 3000); }
+  return { start, stop };
+})();
 function clearHost() {
+  AmbientGlow.stop();
+  WakeMgr.off();
   GA.stopMilestones();
   HealthMon.stop();
   EmbedMgr.unmount();
@@ -1082,16 +1361,17 @@ function ensurePlyr() {
       s.onload = res; s.onerror = () => rej(new Error('Plyr load failed'));
       document.head.appendChild(s);
     });
-  })();
+  })().catch(err => { _plyrReady = null; throw err; });
   return _plyrReady;
 }
 
 async function wrapPlyr(v, extraOpts = {}) {
-  try { await ensurePlyr(); } catch { return null; }
-  if (typeof Plyr === 'undefined') return null;
+  try { await Promise.race([ensurePlyr(), new Promise((_, rj) => setTimeout(() => rj(new Error('plyr timeout')), 3000))]); }
+  catch { try { v.controls = true; } catch {} return null; }
+  if (typeof Plyr === 'undefined') { try { v.controls = true; } catch {} return null; }
   try {
     const opts = {
-      controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'pip', 'fullscreen'],
+      controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'pip', 'airplay', 'fullscreen'],
       settings: ['quality', 'speed'],
       speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
       keyboard: { focused: true, global: false },
@@ -1103,11 +1383,11 @@ async function wrapPlyr(v, extraOpts = {}) {
       ...extraOpts,
     };
     const pl = new Plyr(v, opts);
-    const savedVol = Prefs.getSavedVol();
-    const savedMute = Prefs.getSavedMute();
-    setTimeout(() => { try { pl.volume = savedVol / 100; pl.muted = savedMute; D.volSl.value = String(savedMute ? 0 : savedVol); } catch {} }, 120);
+    const savedVol = Prefs.getSavedVol(curIdx);
+    const savedMute = Prefs.getSavedMute(curIdx);
+    setTimeout(() => { try { pl.volume = savedVol / 100; if (!D.tapPlay.classList.contains('on')) pl.muted = savedMute; D.volSl.value = String(savedMute ? 0 : savedVol); } catch {} }, 120);
     pl.on('volumechange', () => {
-      try { const vol = Math.round(pl.volume * 100); const muted = pl.muted; D.volSl.value = String(muted ? 0 : vol); Prefs.setSavedVol(vol); Prefs.setSavedMute(muted); GA.trackVolume(muted ? 0 : vol, 'plyr'); } catch {}
+      try { const vol = Math.round(pl.volume * 100); const muted = pl.muted; D.volSl.value = String(muted ? 0 : vol); if (!D.tapPlay.classList.contains('on')) { Prefs.setSavedVol(curIdx, vol); Prefs.setSavedMute(curIdx, muted); } GA.trackVolume(muted ? 0 : vol, 'plyr'); } catch {}
     });
     pl.on('enterfullscreen', () => GA.send('fullscreen_enter', { trigger_source: 'plyr' }));
     pl.on('exitfullscreen', () => GA.send('fullscreen_exit', { trigger_source: 'plyr' }));
@@ -1115,7 +1395,7 @@ async function wrapPlyr(v, extraOpts = {}) {
     pl.on('leavepip', () => GA.send('pip_exit', { trigger_source: 'plyr' }));
     pl.on('qualitychange', e => GA.send('quality_changed', { to_quality: String(e.detail?.quality || ''), trigger_source: 'plyr' }));
     return pl;
-  } catch (e) { console.warn('[wrapPlyr] failed:', e); return null; }
+  } catch (e) { LOG('[wrapPlyr] failed:', e); return null; }
 }
 
 /* ── Video helpers ── */
@@ -1142,33 +1422,52 @@ async function safePlay(v) {
 
 /* ── Proxy ── */
 function proxyEncodedOnce(url) {
-  const alreadyEncoded = /%3A|%2F/i.test(String(url));
-  return alreadyEncoded ? String(url) : encodeURIComponent(String(url));
+  return encodeURIComponent(String(url));
 }
 function proxyTarget(endpoint, url) {
   const encoded = proxyEncodedOnce(url);
   if (endpoint.includes('{url}')) return endpoint.replace('{url}', encoded);
-  if (/[?&](?:url|quest)=?$/i.test(endpoint) || endpoint.endsWith('=')) return endpoint + encoded;
+  if (/[?&](?:url|quest)=?$/i.test(endpoint) || endpoint.endsWith('=')) return endpoint + encoded + ((CFG.OWN_PROXY && endpoint === CFG.OWN_PROXY && refP) ? '&ref=' + encodeURIComponent(refP) : '');
   return endpoint.replace(/\/?$/, '/') + encoded;
 }
 function rewriteProxyUrl(url, fallback = false) {
   if (!url) return url;
-  if (CFG.OWN_PROXY) return proxyTarget(CFG.OWN_PROXY, url);
+  // Worker is used only as a CORS fallback (direct first) to save free-tier quota.
+  if (CFG.OWN_PROXY) return fallback ? proxyTarget(CFG.OWN_PROXY, url) : url;
   return fallback ? proxyTarget('https://corsproxy.io/?url=', url) : url;
 }
+/* ── Referer map (embed.st / strmd.st) ── */
+// Hosts whose CDN rejects requests that lack a Referer. With OWN_PROXY set the Worker injects it
+// (and its Origin) on every request; browsers forbid setting Referer from JS, so the
+// setRequestHeader fallback below only matters in non-browser WebViews.
+const REFERER_MAP = {
+  'strmd.st': 'https://embed.st/',
+};
+function refererFor(url) {
+  try {
+    const h = new URL(String(url)).hostname.toLowerCase();
+    for (const k of Object.keys(REFERER_MAP)) if (h === k || h.endsWith('.' + k)) return REFERER_MAP[k];
+  } catch {}
+  return '';
+}
+// Worker URL for a request that must carry a Referer; '' when the Worker is not configured.
+function workerUrlFor(url, wrap = false) {
+  if (!CFG.OWN_PROXY || !refererFor(url) || String(url).startsWith(CFG.OWN_PROXY)) return '';
+  return proxyTarget(CFG.OWN_PROXY, url) + (wrap ? '&wrap=1' : '');
+}
 async function fetchProxied(url) {
-  // Try the source directly first. Some Blogger pages expose CORS only
-  // intermittently; when readable, this preserves the live MPD and ClearKey
-  // values without relying on a third-party proxy.
   try {
     const direct = await fetchWithTimeout(url, CFG.PROXY_TO, { cache: 'no-store', credentials: 'omit' });
     if (direct.ok) return await direct.text();
   } catch {}
+  if (CFG.OWN_PROXY) {
+    try { const r = await fetchWithTimeout(proxyTarget(CFG.OWN_PROXY, url), CFG.PROXY_TO); if (r.ok) return await r.text(); } catch {}
+  }
   const order = [...CFG.PSCORE.keys()].sort((a, b) => CFG.PSCORE[b] - CFG.PSCORE[a]);
   let last;
   for (const i of order) {
     const pu = i === 0 ? proxyTarget('https://corsproxy.io/?url=', url) : CFG.PROXY[i](url);
-    console.debug('[player] proxy request', pu);
+    LOG('[player] proxy request', pu);
     const t0 = Date.now();
     GA.sendSampled('proxy_attempt', 'pa_' + i, { proxy_name: CFG.PROXY_NAMES[i], target_url: url.slice(0, 80) }, 0);
     try {
@@ -1180,6 +1479,7 @@ async function fetchProxied(url) {
       GA.sendSampled('proxy_success', 'ps_' + i, { proxy_name: CFG.PROXY_NAMES[i], response_ms: Date.now() - t0 }, 0);
       return t;
     } catch (e) {
+      LOG('[player] proxy failed', CFG.PROXY_NAMES[i], e?.message || e);
       CFG.PSCORE[i] = Math.max(0, CFG.PSCORE[i] - 1);
       GA.sendSampled('proxy_fail', 'pf_' + i, { proxy_name: CFG.PROXY_NAMES[i], error_message: e?.message || 'unknown' }, 0);
       last = e;
@@ -1188,7 +1488,7 @@ async function fetchProxied(url) {
   throw last || new Error('All proxies failed');
 }
 
-/* ── Cache (per-type TTL, DRM keys never persisted) ── */
+/* ── Cache ── */
 function cGet(k) {
   try {
     const r = sessionStorage.getItem(k);
@@ -1203,7 +1503,7 @@ function cGet(k) {
 function cSet(k, v) {
   try {
     const clean = { ...v, _at: Date.now() };
-    if (clean.drm) delete clean.drm;
+    if (v.drm) return; // never cache DRM entries (keys would be lost)
     clean._ttl = v.type === 'embed' ? CFG.CACHE_TTL.embed : CFG.CACHE_TTL.manifest;
     sessionStorage.setItem(k, JSON.stringify(clean));
   } catch {}
@@ -1211,34 +1511,15 @@ function cSet(k, v) {
 function cDel(k) { try { sessionStorage.removeItem(k); } catch {} }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Stream extraction — v3 (DOMParser-based, comment-safe)
-   ───────────────────────────────────────────────────────────────────────────
-   Blogspot / Blogger pages like live.samuraitv.biz.id embed a large
-   commented-out Shaka <script> block (with a stale manifest URL) *inside*
-   the post body, followed by the live player <script>. Regex-based HTML
-   comment stripping was fragile enough to occasionally leak the commented
-   URL into the active source list, causing the resolver to pick the wrong
-   Akamai node.
+   Stream extraction (DOMParser-based, comment-safe)
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-   Fix: use DOMParser (available in every browser shipped since IE10) to
-   parse the HTML properly. The browser's HTML5 parser never surfaces text
-   from inside `<!-- -->` comments as `<script>.textContent`, so we get a
-   guaranteed comment-free source list. Regex-based `_stripComments` is
-   retained as a fallback for environments without DOMParser.
-   ═══════════════════════════════════════════════════════════════════════ */
-
-/** Strip HTML comments and single-line JS comments from raw HTML.
- *  NOTE: only used as a fallback when DOMParser is unavailable. */
 function _stripComments(html) {
-  // 1. Remove HTML comments.
   let s = String(html).replace(/<!--[\s\S]*?-->/g, '');
-  // 2. Remove `//` line comments not preceded by `:` or `/`.
-  //    No lookbehind — Safari < 16.4 would throw a SyntaxError at parse time.
-  s = s.replace(/(^|[^:\/])\/\/[^\n\r]*/g, '$1');
+  s = s.replace(/(^|\s)\/\/[^\n\r]*/g, '$1');
   return s;
 }
 
-/** Validate a 32-char hex ClearKey pair. Rejects all-zero or repeated patterns. */
 function _validKeyPair(keyId, key) {
   if (!keyId || !key) return false;
   if (keyId.length !== 32 || key.length !== 32) return false;
@@ -1248,21 +1529,12 @@ function _validKeyPair(keyId, key) {
   return true;
 }
 
-/**
- * Parse the HTML once via DOMParser and pull out:
- *   scriptText  — concatenated textContent of all LIVE <script> elements.
- *                 Commented-out <script> blocks are NOT included by the
- *                 HTML5 parser, so this is safe from stale-URL leakage.
- *   iframeSrcs  — src= attributes of live <iframe> elements (safe URLs only).
- *   doc         — the parsed Document, for callers that want to query.
- *   ok          — true if DOMParser succeeded and returned a document.
- */
 function _extractPageSources(html) {
   const out = { scriptText: '', iframeSrcs: [], doc: null, ok: false };
   if (typeof DOMParser === 'undefined') return out;
   let doc = null;
   try { doc = new DOMParser().parseFromString(String(html), 'text/html'); }
-  catch (e) { console.warn('[parser] DOMParser failed:', e); return out; }
+  catch (e) { LOG('[parser] DOMParser failed:', e); return out; }
   if (!doc) return out;
   out.doc = doc;
   out.ok = true;
@@ -1276,7 +1548,7 @@ function _extractPageSources(html) {
       buf += t + '\n';
     }
     out.scriptText = buf;
-  } catch (e) { console.warn('[parser] script scan failed:', e); }
+  } catch (e) { LOG('[parser] script scan failed:', e); }
 
   try {
     const frames = doc.querySelectorAll('iframe[src]');
@@ -1289,34 +1561,24 @@ function _extractPageSources(html) {
       seen.add(src);
       out.iframeSrcs.push(src);
     }
-  } catch (e) { console.warn('[parser] iframe scan failed:', e); }
+  } catch (e) { LOG('[parser] iframe scan failed:', e); }
 
   return out;
 }
 
-/**
- * Extract a ClearKey DRM pair from a text source.
- * @param source       Text to scan.
- * @param alreadyClean Set true if the source has already had comments
- *                     stripped (i.e. it came from DOMParser script text).
- *                     When false, `_stripComments` is applied first.
- */
 function extractCK(source, alreadyClean = false) {
   if (!source) return null;
   const active = alreadyClean ? source : _stripComments(source);
 
-  // 1. Shaka clearKeys: { "keyId32hex": "key32hex" } — allows newlines.
   const shakaRe = /clearKeys\s*:\s*\{[\s\S]{0,600}?\}/gi;
   let sm;
   while ((sm = shakaRe.exec(active)) !== null) {
     const pair = sm[0].match(/"([0-9a-fA-F]{32})"\s*:\s*"([0-9a-fA-F]{32})"/);
     if (pair && _validKeyPair(pair[1], pair[2])) return { keyId: pair[1], key: pair[2] };
-    // Tolerate unquoted or single-quoted forms.
     const loose = sm[0].match(/['"]?([0-9a-fA-F]{32})['"]?\s*:\s*['"]?([0-9a-fA-F]{32})['"]?/);
     if (loose && _validKeyPair(loose[1], loose[2])) return { keyId: loose[1], key: loose[2] };
   }
 
-  // 2a. JWPlayer / config  drm: { clearkey: { keyId:"…", key:"…" } }
   const jwBlockRe = /clearkey\s*:\s*\{[\s\S]{0,800}?\}/gi;
   let jm;
   while ((jm = jwBlockRe.exec(active)) !== null) {
@@ -1326,14 +1588,12 @@ function extractCK(source, alreadyClean = false) {
     if (idM && keyM && _validKeyPair(idM[1], keyM[1])) return { keyId: idM[1], key: keyM[1] };
   }
 
-  // 2b. Flat named fields.
   const idMatch  = active.match(/["']?keyId["']?\s*:\s*["']([0-9a-fA-F]{32})["']/i);
   const keyMatch = active.match(/\b["']?key["']?\s*:\s*["']([0-9a-fA-F]{32})["']/i);
   if (idMatch && keyMatch && _validKeyPair(idMatch[1], keyMatch[1])) {
     return { keyId: idMatch[1], key: keyMatch[1] };
   }
 
-  // 3. Generic hex-pair fallback — allows newlines between `:` and value.
   const pairRe = /"([0-9a-fA-F]{32})"\s*:\s*"([0-9a-fA-F]{32})"/g;
   let pm;
   while ((pm = pairRe.exec(active)) !== null) {
@@ -1343,16 +1603,6 @@ function extractCK(source, alreadyClean = false) {
   return null;
 }
 
-/**
- * Extract { streamUrl, drm } or { isEmbed, streamUrl, embedUrls } from an HTML page.
- *
- * Source priority:
- *   1. DOMParser script text (comment-free, entity-decoded) — the safe path.
- *   2. HTML with comments stripped (regex fallback).
- *
- * This ordering is why the commented-out Shaka block on SamuraiTV pages can
- * no longer shadow the live `const streamUrl = "…mpd"` declaration.
- */
 function extractMfst(html) {
   if (!html || typeof html !== 'string') return null;
 
@@ -1368,7 +1618,6 @@ function extractMfst(html) {
   let url = null;
   let drm = null;
 
-  // Helper: run a regex factory against every source, return first safe hit.
   const tryPattern = (regexFactory) => {
     for (const src of sources) {
       const re = regexFactory();
@@ -1380,7 +1629,6 @@ function extractMfst(html) {
     return null;
   };
 
-  // ── N1. JSON config: `const config = { "file":"…", "drm":{…} }` ──
   const configVarRe = /(?:var|const|let)\s+config\s*=\s*(\{[\s\S]{0,3000}?\})\s*;?/;
   for (const src of sources) {
     const cvM = configVarRe.exec(src);
@@ -1402,11 +1650,9 @@ function extractMfst(html) {
         }
         break;
       }
-    } catch { /* not valid JSON — keep going */ }
+    } catch { /* not valid JSON */ }
   }
 
-  // ── N2. Named manifest variable, tolerating newlines around `=` ──
-  //       Handles: `const streamUrl =\n  "https://…mpd";`
   if (!url) {
     const VN = [
       'manifestUri','manifestUrl','manifestURL','manifest_uri','manifest_url',
@@ -1435,37 +1681,24 @@ function extractMfst(html) {
     url = tryPattern(() => assignRe) || tryPattern(() => propRe);
   }
 
-  // ── N3. JWPlayer .setup({ file:"…" }) ──
   if (!url) {
     url = tryPattern(() => /\.setup\s*\(\s*\{[\s\S]{0,3000}?\bfile\s*:\s*["'`](https?:\/\/[^"'`\s]+)["'`]/i);
   }
-
-  // ── N4. Generic .load() / .loadSource() / .loadManifest() with URL ──
   if (!url) {
     url = tryPattern(() => /\.(?:load|loadSource|loadManifest)\s*\(\s*[`'"](https?:\/\/[^`'"]+)[`'"]/i);
   }
-
-  // ── N5. Literal `file:` with manifest extension ──
   if (!url) {
     url = tryPattern(() => /\bfile\s*:\s*["'`](https?:\/\/[^"'`\s]+\.(?:m3u8|mpd)[^"'`\s]*)/i);
   }
-
-  // ── N6. src / source attribute with manifest extension ──
   if (!url) {
     url = tryPattern(() => /(?:src|source)\s*[=:]\s*["'`](https?:\/\/[^"'`\s]+\.(?:m3u8|mpd)[^"'`\s]*)/i);
   }
-
-  // ── N7. JSON-style "file":"https://…mpd" ──
   if (!url) {
     url = tryPattern(() => /"(?:file|src|source|url)"\s*:\s*"(https?:\/\/[^"]+\.(?:m3u8|mpd)[^"]*)"/i);
   }
-
-  // ── N8. <video|source src="…mpd"> ──
   if (!url) {
     url = tryPattern(() => /<(?:video|source)[^>]+(?:data-)?src=["']([^"']+\.(?:m3u8|mpd)[^"']*)['"]/i);
   }
-
-  // ── N9. atob("base64url") ──
   if (!url) {
     for (const src of sources) {
       const b64re = /atob\s*\(\s*["']([A-Za-z0-9+/=_-]{30,})["']\s*\)/g;
@@ -1480,11 +1713,9 @@ function extractMfst(html) {
     }
   }
 
-  // ── N10. Bare manifest URL ──
   if (!url) url = tryPattern(() => /https?:\/\/[^\s"'`<>\\]+\.m3u8[^\s"'`<>\\]*/i);
   if (!url) url = tryPattern(() => /https?:\/\/[^\s"'`<>\\]+\.mpd[^\s"'`<>\\]*/i);
 
-  // ── N11. iframe fallback (from live DOM only, never from comments) ──
   if (!url) {
     let srcs = page.iframeSrcs || [];
     if (!srcs.length) {
@@ -1504,7 +1735,6 @@ function extractMfst(html) {
 
   if (!url) return null;
 
-  // ── Inline !! DRM separator (documented syntax: url!!keyId:key) ──
   if (url.includes('!!')) {
     const si = url.indexOf('!!');
     const mu = url.slice(0, si);
@@ -1518,14 +1748,12 @@ function extractMfst(html) {
     }
   }
 
-  // ── DRM extraction — script text first (comment-safe) ──
   if (!drm && scriptText.trim()) drm = extractCK(scriptText, true);
   if (!drm) drm = extractCK(strippedHtml, true);
   if (!drm) drm = extractCK(html, false);
 
   return { streamUrl: url, drm };
 }
-/* ── End extraction ─────────────────────────────────────────────────────── */
 
 async function withR(fn, n = CFG.MAX_RETRY, d = 800) {
   for (let i = 0; i <= n; i++) {
@@ -1539,7 +1767,7 @@ function withTO(p, ms = CFG.PLAYER_TO) {
   return Promise.race([p.finally(() => clearTimeout(t)), tp]);
 }
 
-/* ── Kafeizhibo room resolver (parallelized) ── */
+/* ── Kafeizhibo room resolver ── */
 async function resolveKafeizhibo(url) {
   const m = url.match(/kafeizhibo\.com\/(?:pc\/)?room\/(\d+)/);
   if (!m) return null;
@@ -1641,31 +1869,151 @@ async function resolveKafeizhiboRecording(url) {
   }
 }
 
-/* ── Oneball.live resolver (API now via proxy chain) ── */
+/* ── Oneball.live resolver ── */
+/*
+ * OneBall sources may point at an iframe wrapper instead of exposing the
+ * media URL directly.  Examples include:
+ *   ?url=<encoded .m3u8>&title=...
+ *   topplayer.html?u=<base64 URL containing liveUrl=<encoded .m3u8>>
+ * Resolve those layers without carrying wrapper-only parameters such as
+ * title into the final mora/HLS URL.
+ */
+function decodeNestedValue(value, base64 = false) {
+  let out = String(value || '').trim();
+  // A plain URL is already decoded: decoding it again turns %26 into & and drops params like txTime.
+  if (!base64 && /^https?:\/\//i.test(out)) return out;
+  for (let i = 0; i < 4 && out; i++) {
+    let next = out;
+    try { next = decodeURIComponent(next); } catch {}
+    if (base64 || (i === 0 && /^[A-Za-z0-9_-]{24,}={0,2}$/.test(next) && !/^https?:\/\//i.test(next))) {
+      try {
+        const b = next.replace(/-/g, '+').replace(/_/g, '/');
+        next = atob(b + '='.repeat((4 - b.length % 4) % 4));
+      } catch {}
+      base64 = false;
+    }
+    if (next === out) break;
+    out = next.trim();
+    // Once a full URL is reached, stop: decoding again would turn its encoded %26/%3F/%3D into real
+    // separators and split a signed query (txSecret/txTime) off the stream URL.
+    if (/^https?:\/\//i.test(out)) break;
+  }
+  return out;
+}
+
+function extractNestedMediaUrls(sourceUrl) {
+  const media = [];
+  const queue = [{ value: sourceUrl, base64: false }];
+  const seen = new Set();
+  const add = value => {
+    const v = normalizeStreamUrl(value);
+    if (!v || !safe(v) || seen.has(v)) return;
+    seen.add(v);
+    queue.push({ value: v, base64: false });
+  };
+
+  while (queue.length && seen.size < 24) {
+    const item = queue.shift();
+    const decoded = decodeNestedValue(item.value, item.base64);
+    if (!decoded || !safe(decoded)) continue;
+    let u;
+    try { u = new URL(decoded); } catch { continue; }
+
+    if (/\.(?:m3u8|mpd)$/i.test(u.pathname)) {
+      if (!media.includes(decoded)) media.push(decoded);
+    }
+
+    for (const [key, raw] of u.searchParams.entries()) {
+      if (!/^(?:url|u|liveurl|live_url|src|source|stream|file)$/i.test(key)) continue;
+      const child = decodeNestedValue(raw, /^u$/i.test(key));
+      if (child && safe(child)) add(child);
+    }
+  }
+  return media;
+}
+
+function decodeDisplayText(value, fallback = '') {
+  let text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (typeof document !== 'undefined' && text) {
+    try {
+      const el = document.createElement('textarea');
+      el.innerHTML = text;
+      text = el.value.replace(/\s+/g, ' ').trim();
+    } catch {}
+  }
+  return text || fallback;
+}
+
+const isHDJ = l => /\bHD[\s_.-]*J\b/i.test(String(l || ''));
+const isIgnoredOneballLabel = l => /^\s*HD[\s_.-]*B(?:\b|\s*\()/i.test(String(l || '')) || (isIOS() && /^\s*HD[\s_.-]*P(?:remium)?(?:\b|\s*\()/i.test(String(l || '')));
+function oneballEntries(embedUrl, label, pageUrl) {
+  const cleanLabel = decodeDisplayText(label, 'Stream');
+  const mediaUrls = extractNestedMediaUrls(embedUrl);
+  const out = [];
+  mediaUrls.forEach(mediaUrl => {
+    const type = /\.mpd(?:[?#&]|$)/i.test(mediaUrl) ? 'dash' : 'hls';
+    out.push({
+      type, url: mediaUrl, originalUrl: pageUrl, customLabel: cleanLabel,
+      fromOneball: true, extractedFromIframe: true, isPriority: isHDJ(cleanLabel),
+    });
+  });
+  if (safe(embedUrl)) {
+    out.push({
+      type: 'embed', url: embedUrl, embedUrls: [embedUrl], originalUrl: pageUrl,
+      customLabel: mediaUrls.length ? `${cleanLabel} iframe` : cleanLabel,
+      fromOneball: true,
+    });
+  }
+  return out;
+}
+
+async function fetchOneballSignals(pageUrl, eventId) {
+  // Race every route at once (direct + own worker, oneball.live + the page's own host); first valid answer wins.
+  const hosts = new Set(['https://oneball.live']);
+  try { hosts.add(new URL(pageUrl).origin); } catch {}
+  const attempts = [];
+  hosts.forEach(h => {
+    const api = `${h}/api/live/${eventId}.json`;
+    const routes = [api];
+    if (CFG.OWN_PROXY) routes.push(proxyTarget(CFG.OWN_PROXY, api));
+    routes.forEach(u => attempts.push((async () => {
+      const res = await fetchWithTimeout(u, 6000, { cache: 'no-store', credentials: 'omit' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.text();
+      if (!body || /^\s*</.test(body)) throw new Error('OneBall API returned HTML instead of JSON');
+      let data;
+      try { data = JSON.parse(body); } catch { throw new Error('OneBall API returned invalid JSON'); }
+      if (!Array.isArray(data?.signals) || !data.signals.length) throw new Error('no signals');
+      return data;
+    })()));
+  });
+  return Promise.any(attempts);
+}
+
 async function resolveOneballApi(pageUrl) {
   if (!safe(pageUrl)) return [];
-  const match = pageUrl.match(/\/live\/(\d+)(?:\.html)?(?:[?#]|$)/i);
+  const match = pageUrl.match(/\/live\/(\d+)(?:\.html)?(?:[?#&]|$)/i);
   if (!match) return [];
   const eventId = match[1];
   const apiUrl = `https://oneball.live/api/live/${eventId}.json`;
   try {
-    // OneBall explicitly enables CORS on this JSON endpoint. Do not send it
-    // through the public proxy rotation: a failed proxy can hold startup in
-    // the Initializing state while all proxy attempts time out.
-    const res = await fetchWithTimeout(apiUrl, 10000, { cache: 'no-store', credentials: 'omit' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await fetchOneballSignals(pageUrl, eventId);
     const signals = Array.isArray(data?.signals) ? data.signals : [];
     const results = [];
     const seen = new Set();
-    signals.slice().sort((a, b) => (Number(a?.sort_order) || 0) - (Number(b?.sort_order) || 0)).forEach((signal, index) => {
+    signals.slice().sort((a, b) => (Number(isHDJ(b?.label)) - Number(isHDJ(a?.label))) || (Number(a?.sort_order) || 0) - (Number(b?.sort_order) || 0)).forEach((signal, index) => {
+      if (isIgnoredOneballLabel(signal?.label)) {
+        LOG('[player] skipping unsupported iOS OneBall source', signal?.label);
+        GA.send('oneball_ios_source_skipped', { label: String(signal?.label || '').slice(0, 60) });
+        return;
+      }
       const url = normalizeStreamUrl(signal?.url || '');
       if (!url || !safe(url) || seen.has(url)) return;
       seen.add(url);
       const playType = String(signal?.play_type || '').toLowerCase();
-      const label = String(signal?.label || `Stream ${index + 1}`).trim();
+      const label = decodeDisplayText(signal?.label, `Stream ${index + 1}`);
       const embedUrl = playType === 'iframe' ? url : `https://efg8732dsy.luxiang.win/?url=${encodeURIComponent(url)}&title=${encodeURIComponent(label)}`;
-      results.push({ type: 'embed', url: embedUrl, embedUrls: [embedUrl], originalUrl: pageUrl, customLabel: label });
+      results.push(...oneballEntries(embedUrl, label, pageUrl));
     });
     GA.send('oneball_api_success', { event_id: eventId, link_count: results.length });
     return results;
@@ -1682,16 +2030,15 @@ function oneballEmbedUrl(streamUrl, title = '') {
 }
 
 function oneballReplayId(pageUrl) {
-  const match = pageUrl.match(/\/replay\/(\d+)(?:\.html)?(?:[?#]|$)/i);
+  const match = pageUrl.match(/\/replay\/(\d+)(?:\.html)?(?:[?#&]|$)/i);
   return match ? match[1] : '';
 }
 
 async function resolveOneball(pageUrl) {
-  // A vplayer URL is already the embeddable player requested by callers.
   if (/\/player\/vplayer\.html(?:[?#]|$)/i.test(pageUrl)) {
     const parsed = new URL(pageUrl);
     const title = parsed.searchParams.get('title') || 'ReplayPlayer';
-    return [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: title }];
+    return [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: title, fromOneball: true }];
   }
 
   const apiResults = await resolveOneballApi(pageUrl);
@@ -1709,7 +2056,7 @@ async function resolveOneball(pageUrl) {
         anchors = [...scope.querySelectorAll('a.stream-btn[href], a[class*="stream-btn"][href], button.stream-btn[data-url], button[class*="stream-btn"][data-url]')].map(a => ({
           href: a.getAttribute('href') || a.getAttribute('data-url') || '',
           playType: (a.getAttribute('data-play-type') || '').toLowerCase(),
-          label: (a.textContent || '').trim().replace(/\s+/g, ' '),
+          label: decodeDisplayText(a.textContent, ''),
         }));
       } catch {}
     }
@@ -1717,12 +2064,12 @@ async function resolveOneball(pageUrl) {
       const re = /<a[^>]+class=["'][^"']*stream-btn[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
       let m;
       while ((m = re.exec(html)) !== null) {
-        const label = m[2].replace(/<[^>]+>/g, '').trim().replace(/\s+/g, ' ');
+        const label = decodeDisplayText(m[2].replace(/<[^>]+>/g, ''), '');
         anchors.push({ href: m[1], label });
       }
       const buttonRe = /<button[^>]+class=["'][^"']*stream-btn[^"']*["'][^>]*data-url=["']([^"']+)["'][^>]*data-play-type=["']([^"']*)["'][^>]*>([\s\S]*?)<\/button>/gi;
       while ((m = buttonRe.exec(html)) !== null) {
-        const label = m[3].replace(/<[^>]+>/g, '').trim().replace(/\s+/g, ' ');
+        const label = decodeDisplayText(m[3].replace(/<[^>]+>/g, ''), '');
         anchors.push({ href: m[1], playType: m[2].toLowerCase(), label });
       }
     }
@@ -1733,12 +2080,17 @@ async function resolveOneball(pageUrl) {
       if (!decoded || !safe(decoded) || seen.has(decoded)) return;
       seen.add(decoded);
       const label = a.label || `Stream ${results.length + 1}`;
+      if (isIgnoredOneballLabel(label)) {
+        LOG('[player] skipping unsupported iOS OneBall page source', label);
+        return;
+      }
       const embedUrl = a.playType === 'm3u8' || /\.m3u8(?:[?#]|$)/i.test(decoded)
         ? oneballEmbedUrl(decoded, label)
         : decoded;
       if (!embedUrl || !safe(embedUrl)) return;
-      results.push({ type: 'embed', url: embedUrl, embedUrls: [embedUrl], originalUrl: pageUrl, customLabel: label });
+      results.push(...oneballEntries(embedUrl, label, pageUrl));
     });
+    results.sort((a, b) => Number(!!b.isPriority) - Number(!!a.isPriority));
     GA.send('oneball_resolve_success', { page_url: pageUrl.slice(0, 80), replay_id: oneballReplayId(pageUrl), link_count: results.length, resolve_ms: Date.now() - t0 });
     return results;
   } catch (e) {
@@ -1747,20 +2099,266 @@ async function resolveOneball(pageUrl) {
   }
 }
 
+/* ── Xoilac resolver ── */
+/*
+ * Xoilac match pages (xoilaczzz.pro/truc-tiep/...) expose their streams in two layers:
+ *   1. Outer page: channel buttons ("NICK", "HD NICK", "Tom" ...). Depending on the template the iframe
+ *      URL comes from a list_stream array in an inline script ("https:\/\/xlz.domainkqt.cc\/ajax\/chanel\/..."),
+ *      or from onclick go('<iframe-url>') / data-url / data-src / href attributes. The iframe URL lives on xlz.domainkqt.cc / domainkqt.cc or has
+ *      ajax/chanel in its path, e.g. https://xlz.domainkqt.cc/ajax/chanel/type/8/link/channel5/off-tvc
+ *      (the same URL can also sit in data-url / data-src / href attributes or bare inside inline scripts).
+ *   2. Iframe page: a small JW Player wrapper that declares the stream near the top of an inline
+ *      script (var urlStream = "https://.../channel5.m3u8") or inside jwplayer.setup({ file: "..." }).
+ * Every iframe is fetched through fetchProxied, its .m3u8 is extracted, and one hls entry per
+ * channel is returned (labelled "Xoilac N" from the channel<N> segment; duplicate .m3u8 URLs skipped).
+ */
+const XOILAC_HOST_RE = /(?:^|\.)domainkqt\.cc$/i;
+function isXoilacIframeUrl(u) {
+  try {
+    const p = new URL(u);
+    return XOILAC_HOST_RE.test(p.hostname) || /ajax\/chanel/i.test(p.pathname);
+  } catch { return false; }
+}
+function xoilacCleanRaw(raw, base) {
+  let v = normalizeStreamUrl(String(raw || '')).replace(/\\\//g, '/').replace(/\\u0026/gi, '&').replace(/[\\'"<>)\]]+$/g, '').trim();
+  if (!v) return '';
+  try { v = new URL(v, base).href; } catch { return ''; }
+  return v;
+}
+function extractXoilacIframeUrls(html, pageUrl) {
+  const found = [];
+  const add = raw => {
+    const u = xoilacCleanRaw(raw, pageUrl);
+    if (u && safe(u) && isXoilacIframeUrl(u) && !found.includes(u)) found.push(u);
+  };
+  // Document order matters (it defines Xoilac 1..N when no channel number exists), so collect from the
+  // channel buttons first, then attributes, then bare URLs in scripts.
+  let m;
+  const goRe = /\bgo\(\s*(?:&#0?39;|&quot;|['"])((?:https?:)?\/\/[^'"&]+(?:&amp;[^'"&]*)*|\/[^'"]+)(?:&#0?39;|&quot;|['"])/gi;
+  while ((m = goRe.exec(html)) !== null) add(m[1]);
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('[onclick], [data-url], [data-src], [href]').forEach(el => {
+        const oc = el.getAttribute('onclick') || '';
+        const om = oc.match(/go\(\s*['"]([^'"]+)['"]/i);
+        if (om) add(om[1]);
+        ['data-url', 'data-src', 'href'].forEach(a => { const v = el.getAttribute(a); if (v) add(v); });
+      });
+    } catch {}
+  }
+  const bareRe = /(?:https?:)?\\?\/\\?\/[a-z0-9.-]*domainkqt\.cc[^\s'"<>\\]*(?:\\\/[^\s'"<>\\]*)*|https?:\/\/[^\s'"<>\\]+ajax\/chanel[^\s'"<>\\]*/gi;
+  while ((m = bareRe.exec(html)) !== null) add(m[0].startsWith('//') ? 'https:' + m[0] : m[0]);
+  return found;
+}
+function extractXoilacM3u8(html, iframeUrl) {
+  const pick = raw => {
+    const u = xoilacCleanRaw(raw, iframeUrl);
+    return u && safe(u) && /\.m3u8(?:[?#]|$)/i.test(u) ? u : '';
+  };
+  const patterns = [
+    /\burlStream\s*=\s*["']([^"']+)["']/i,
+    /\bfile\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i,
+    /["']((?:https?:)?(?:\\?\/){2}[^"'\s]+?\.m3u8[^"'\s]*)["']/i,
+    /((?:https?:)?\/\/[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*)/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    const u = m && pick(m[1]);
+    if (u) return u;
+  }
+  return '';
+}
+// The match page stores bare iframe URLs (".../link/channel5") in a list_stream array and its own JS
+// appends "/off-tvc" and "?is_off_add=false" before embedding; do the same so we get the ad-free wrapper.
+function xoilacEmbedUrl(u) {
+  try {
+    const p = new URL(u);
+    if (!/\/off-tvc\/?$/i.test(p.pathname)) p.pathname = p.pathname.replace(/\/+$/, '') + '/off-tvc';
+    if (!p.searchParams.has('is_off_add')) p.searchParams.set('is_off_add', 'false');
+    return p.href;
+  } catch { return u; }
+}
+// Iframe pages are fetched with the match page as Referer (what a browser sends when the iframe loads),
+// via the own worker first; every attempt's HTTP status is logged so failures are diagnosable.
+async function fetchXoilacIframe(iframeUrl, pageUrl) {
+  if (CFG.OWN_PROXY) {
+    try {
+      const ref = new URL(pageUrl).origin + '/';
+      const r = await fetchWithTimeout(CFG.OWN_PROXY + encodeURIComponent(iframeUrl) + '&ref=' + encodeURIComponent(ref), CFG.PROXY_TO);
+      LOG('[player] xoilac worker status', r.status, iframeUrl);
+      if (r.ok) { const t = await r.text(); if (t) return t; }
+    } catch (e) { LOG('[player] xoilac worker error', e?.message || e, iframeUrl); }
+  }
+  return fetchProxied(iframeUrl);
+}
+async function resolveXoilac(pageUrl) {
+  if (!safe(pageUrl)) return [];
+  const t0 = Date.now();
+  GA.send('xoilac_resolve_start', { page_url: pageUrl.slice(0, 80) });
+  // A caller may provide the channel iframe itself rather than the match page.
+  // Probe that URL directly for the manifest so it becomes a native HLS source.
+  if (isXoilacIframeUrl(pageUrl)) {
+    try {
+      const iframeHtml = await fetchXoilacIframe(pageUrl, pageUrl);
+      const m3u8 = extractXoilacM3u8(iframeHtml, pageUrl);
+      if (m3u8) {
+        GA.send('xoilac_direct_iframe_hls', { iframe_url: pageUrl.slice(0, 100), stream_url: m3u8.slice(0, 100) });
+        return [
+          { type: 'hls', url: m3u8, originalUrl: pageUrl, customLabel: 'Xoilac HLS', fromXoilac: true, extractedFromIframe: true, pageUrl },
+          { type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true },
+        ];
+      }
+      LOG('[player] direct xoilac iframe contained no m3u8', pageUrl);
+    } catch (e) { LOG('[player] direct xoilac iframe probe failed', e?.message || e); }
+    return [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true }];
+  }
+  try {
+    const html = await fetchProxied(pageUrl);
+    const iframes = extractXoilacIframeUrls(html, pageUrl);
+    if (!iframes.length) {
+      LOG('[player] xoilac: no iframe URLs on page', pageUrl);
+      GA.send('xoilac_no_iframes', { page_url: pageUrl.slice(0, 80), html_len: html.length });
+      return safe(pageUrl) ? [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac page', fromXoilac: true }] : [];
+    }
+    GA.send('xoilac_iframes_found', { page_url: pageUrl.slice(0, 80), count: iframes.length });
+
+    // Fetch every iframe page in parallel (through the proxy chain); keep results in page order.
+    const fetched = await Promise.all(iframes.map(async iframeUrl => {
+      try { return { iframeUrl, m3u8: extractXoilacM3u8(await fetchXoilacIframe(xoilacEmbedUrl(iframeUrl), pageUrl), iframeUrl) }; }
+      catch (e) { return { iframeUrl, error: (e?.message || 'unknown').slice(0, 120) }; }
+    }));
+
+    const seen = new Set();
+    const results = [];
+    fetched.forEach(({ iframeUrl, m3u8, error }) => {
+      if (error) {
+        LOG('[player] xoilac iframe fetch failed', iframeUrl, error);
+        GA.send('xoilac_channel_fail', { iframe_url: iframeUrl.slice(0, 100), error });
+        return;
+      }
+      if (!m3u8) {
+        LOG('[player] xoilac iframe has no .m3u8', iframeUrl);
+        GA.send('xoilac_channel_no_m3u8', { iframe_url: iframeUrl.slice(0, 100) });
+        return;
+      }
+      if (seen.has(m3u8)) {
+        GA.send('xoilac_channel_duplicate', { iframe_url: iframeUrl.slice(0, 100) });
+        return;
+      }
+      seen.add(m3u8);
+      const num = (iframeUrl.match(/channel-?(\d+)/i) || [])[1];
+      const customLabel = num ? `Xoilac ${num}` : 'Xoilac';
+      results.push({
+        type: 'hls', url: m3u8, originalUrl: m3u8, customLabel,
+        fromXoilac: true, extractedFromIframe: true, pageUrl,
+      });
+      LOG('[player] xoilac channel ok', customLabel, m3u8);
+      GA.send('xoilac_channel_ok', { label: customLabel, iframe_url: iframeUrl.slice(0, 100), stream_url: m3u8.slice(0, 100) });
+    });
+
+    // Keep the match page itself as a final option if extracted HLS fails.
+    // loadStreams() sorts direct HLS ahead of all iframe sources.
+    if (safe(pageUrl)) {
+      results.push({
+        type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl,
+        customLabel: results.some(x => x.type === 'hls') ? 'Xoilac page fallback' : 'Xoilac page',
+        fromXoilac: true,
+      });
+    }
+    GA.send('xoilac_resolve_success', { page_url: pageUrl.slice(0, 80), stream_count: results.length, iframe_count: iframes.length, resolve_ms: Date.now() - t0 });
+    return results;
+  } catch (e) {
+    GA.send('xoilac_resolve_fail', { page_url: pageUrl.slice(0, 80), error: (e?.message || 'unknown').slice(0, 120) });
+    return safe(pageUrl) ? [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac page fallback', fromXoilac: true }] : [];
+  }
+}
+
+/* ── embed.st resolver ── */
+function isEmbedStUrl(u) {
+  try { const h = new URL(u).hostname.toLowerCase(); return h === 'embed.st' || h.endsWith('.embed.st'); } catch { return false; }
+}
+// /embed/admin/<slug>/1 -> "<slug>": skip the trailing numeric server index so the label isn't just "1".
+function embedStSlug(u) {
+  try {
+    const seg = new URL(u).pathname.split('/').filter(Boolean);
+    while (seg.length > 1 && /^\d+$/.test(seg[seg.length - 1])) seg.pop();
+    return seg.pop() || 'stream';
+  } catch { return 'stream'; }
+}
+function extractEmbedStM3u8(html, pageUrl) {
+  const clean = v => String(v || '').replace(/\\\//g, '/').replace(/\\u0026/gi, '&').replace(/&amp;/gi, '&').trim();
+  const attempts = [
+    ['urlStream', () => (html.match(/var\s+urlStream\s*=\s*["']([^"']+)["']/i) || [])[1]],
+    ['jwplayer', () => (html.match(/jwplayer\([^)]*\)\s*\.setup\(\s*\{[\s\S]*?\bfile\s*:\s*["']([^"']+)["']/i) || [])[1]],
+    ['bare', () => (html.match(/https?:(?:\\?\/){2}(?:[^"'\s<>\\]|\\\/)+?\.m3u8(?:[^"'\s<>\\]|\\\/)*/i) || [])[0]],
+  ];
+  for (const [method, fn] of attempts) {
+    let v = clean(fn());
+    if (!v) continue;
+    try { v = new URL(v, pageUrl).href; } catch { continue; }
+    if (safe(v) && /\.m3u8([?&#]|$)/i.test(v)) return { url: v, method };
+  }
+  return null;
+}
+async function resolveEmbedSt(pageUrl) {
+  const t0 = Date.now();
+  const slug = embedStSlug(pageUrl);
+  let html;
+  try {
+    html = await fetchProxied(pageUrl);
+    GA.send('embed_page_fetched', { page_url: pageUrl.slice(0, 100), html_len: html.length, resolve_ms: Date.now() - t0 });
+    LOG('[player] embed_page_fetched', pageUrl, html.length);
+  } catch (e) {
+    GA.send('embed_resolve_fail', { stage: 'page_fetch', reason: String(e?.message || 'unknown').slice(0, 100) });
+    LOG('[player] embed_resolve_fail page_fetch', e?.message || e);
+    return null;
+  }
+  const ex = extractEmbedStM3u8(html, pageUrl);
+  if (!ex) {
+    GA.send('embed_resolve_fail', { stage: 'm3u8_extract', reason: 'no_m3u8_in_page' });
+    LOG('[player] embed_resolve_fail m3u8_extract');
+    LOG('[player] embed page body (first 700 chars)', html.slice(0, 700));
+    return null;
+  }
+  GA.send('embed_m3u8_extracted', { method: ex.method, stream_url: ex.url.slice(0, 100), resolve_ms: Date.now() - t0 });
+  LOG('[player] embed_m3u8_extracted', ex.method, ex.url);
+  return { type: 'hls', url: ex.url, originalUrl: pageUrl, customLabel: `PPV ${slug}`, fromEmbedSt: true, pageUrl };
+}
+
 /* ── resolveStream ── */
 async function resolveStream(url) {
   const originalUrl = url;
   url = normalizeStreamUrl(url);
   if (!safe(url)) throw new Error('Invalid stream URL');
+  // embed.st: extract the m3u8 (played through the Worker, which injects Referer/Origin for strmd.st).
+  // If extraction fails, fall back to the provider's own iframe player as before.
+  try {
+    const parsed = new URL(url);
+    if (isEmbedStUrl(url)) {
+      const hlsSrc = await resolveEmbedSt(url);
+      if (hlsSrc) return { ...hlsSrc, originalUrl: originalUrl || url };
+      const slug = embedStSlug(url);
+      return {
+        type: 'embed', url, embedUrls: [url], originalUrl: originalUrl || url,
+        customLabel: `PPV ${slug}`, fromEmbedSt: true,
+      };
+    }
+  } catch {}
+  // Keep the upstream player page available behind its extracted HLS URL.
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'player.online878.com' && /\/live\/index\.html$/i.test(parsed.pathname)) {
+      return { type: 'embed', url, embedUrls: [url], originalUrl: originalUrl || url, customLabel: 'Vivo player fallback', fromOneball: true };
+    }
+  } catch {}
   const ck = CFG.CACHE_PREFIX + url;
   const c = cGet(ck);
   if (c) { GA.send('stream_cache_hit', { stream_url: url.slice(0, 80), stream_type: c.type }); return c; }
   GA.send('stream_resolve_start', { stream_url: url.slice(0, 80) });
   const t0 = Date.now();
 
-  // [signed-url] Tencent-style signed URL — pass through raw, no proxy,
-  // no HTML scraping, no parsing. Runs before every other branch so a
-  // signed manifest URL never gets near fetchProxied() or the !! DRM split.
+  // [signed-url] raw passthrough — no proxy, no scraping, no parsing.
   if (isSignedUrl(url)) {
     logSignedUrlInfo(url);
     const signedExpiry = signedTimestamp(url);
@@ -1864,67 +2462,79 @@ const _sc = new Map();
 function loadSc(src) {
   if (_sc.has(src)) return _sc.get(src);
   const p = new Promise((res, rej) => {
-    if (document.querySelector(`script[src="${src}"]`)) return res();
     const s = document.createElement('script');
     s.src = src; s.async = true;
-    s.onload = res; s.onerror = () => rej(new Error('Load failed: ' + src));
+    s.onload = res; s.onerror = () => { s.remove(); _sc.delete(src); rej(new Error('Load failed: ' + src)); };
     document.head.appendChild(s);
   });
   _sc.set(src, p);
   return p;
 }
 
-/* ── Stream Health Monitor (fixed math, live-gated) ── */
+/* ── Stream Health Monitor ── */
 const HealthMon = (() => {
-  let _timer = null, _lastTime = 0, _stallTicks = 0, _vid = null, _idx = 0, _recovery = false;
+  let _timer = null, _lastTime = 0, _stallTicks = 0, _vid = null, _idx = 0, _recovery = false, _recoveries = 0;
   function _isLive(v) { return v && (v.duration === Infinity || isNaN(v.duration) || !isFinite(v.duration)); }
   function _getLiveEdge(v) {
     if (!_isLive(v)) return null;
-    if (!v.buffered || v.buffered.length === 0) return null;
-    return v.buffered.end(v.buffered.length - 1);
+    const r = (v.seekable && v.seekable.length) ? v.seekable : v.buffered; // seekable end = real live edge
+    if (!r || r.length === 0) return null;
+    return r.end(r.length - 1);
   }
   function _tick() {
     const v = _vid;
     if (!v || !(v instanceof HTMLVideoElement) || v.paused || v.ended) return;
     const ct = v.currentTime;
+    const hls = curAdapter === 'hlsjs' ? instances.find(x => x && typeof x.recoverMediaError === 'function') : null;
     const edge = _getLiveEdge(v);
-    if (edge !== null) {
-      const drift = edge - ct;
+    const drift = hls && Number.isFinite(hls.latency) ? hls.latency : edge !== null ? edge - ct : null;
+    if (drift !== null) {
       if (drift > 3) { D.latencyBadge.textContent = `🔴 ${Math.round(drift)}s behind live`; D.latencyBadge.classList.add('on'); }
       else D.latencyBadge.classList.remove('on');
       D.jumpLiveBtn.classList.toggle('on', drift > CFG.LATENCY_WARN);
-    } else {
-      D.latencyBadge.classList.remove('on');
-      D.jumpLiveBtn.classList.remove('on');
-    }
+    } else { D.latencyBadge.classList.remove('on'); D.jumpLiveBtn.classList.remove('on'); }
 
     if (Math.abs(ct - _lastTime) < 0.1 && !v.seeking) {
       _stallTicks++;
       if (_stallTicks >= 1) setHealthDot(_idx, 'amber');
       if (_stallTicks >= CFG.STALL_TICKS && !_recovery) {
-        _recovery = true; setHealthDot(_idx, 'red');
-        GA.send('health_stall_recovery', { stall_ticks: _stallTicks, adapter_name: curAdapter });
+        _recovery = true; setHealthDot(_idx, 'red'); _recoveries++;
+        GA.send('health_stall_recovery', { stall_ticks: _stallTicks, adapter_name: curAdapter, attempt: _recoveries });
+        if (_recoveries > 2) { // recovery is not working: move on instead of retrying forever
+          _recoveries = 0; _recovery = false; _stallTicks = 0;
+          if (!silentFailover('silent_failover_stall', 'stalled')) showError('Stream stalled');
+          return;
+        }
+        showSwBanner('Reconnecting…');
         try {
           const p = ct;
-          v.load();
-          v.currentTime = p + 0.5;
-          safePlay(v).then(() => { _recovery = false; _stallTicks = 0; }).catch(() => {});
+          if (curAdapter === 'hlsjs') {
+            const h = instances.find(x => x && typeof x.recoverMediaError === 'function' && typeof x.startLoad === 'function');
+            if (h) { try { h.recoverMediaError(); } catch {} try { h.startLoad(); } catch {} }
+            try { v.currentTime = p + 0.5; } catch {}
+          } else if (curAdapter === 'native' || curAdapter === 'native-hls') {
+            v.load();
+            v.currentTime = p + 0.5;
+          } else {
+            try { v.currentTime = p + 0.5; } catch {}
+          }
+          safePlay(v).catch(() => {}).finally(() => { _recovery = false; _stallTicks = 0; });
         } catch {}
       }
     } else {
-      _stallTicks = 0; _recovery = false; setHealthDot(_idx, 'green');
+      _stallTicks = 0; _recovery = false; _recoveries = 0; setHealthDot(_idx, 'green');
     }
     _lastTime = ct;
   }
   return {
     start(vid, idx) {
       HealthMon.stop();
-      _vid = vid; _idx = idx; _lastTime = vid.currentTime || 0; _stallTicks = 0; _recovery = false;
+      _vid = vid; _idx = idx; _lastTime = vid.currentTime || 0; _stallTicks = 0; _recovery = false; _recoveries = 0;
       _timer = setInterval(_tick, CFG.HEALTH_INTERVAL);
-      const savedVol = Prefs.getSavedVol();
-      const savedMute = Prefs.getSavedMute();
+      const savedVol = Prefs.getSavedVol(curIdx);
+      const savedMute = Prefs.getSavedMute(curIdx);
       vid.volume = savedMute ? 0 : savedVol / 100;
-      vid.muted = savedMute;
+      if (!D.tapPlay.classList.contains('on')) vid.muted = savedMute; // keep autoplay-muted fallback intact
       D.volSl.value = String(savedMute ? 0 : savedVol);
     },
     stop() {
@@ -1935,24 +2545,48 @@ const HealthMon = (() => {
     },
     jumpToLive() {
       if (!_vid) return;
+      const hls = instances.find(x => x && typeof x.recoverMediaError === 'function');
+      if (hls?.liveSyncPosition) { _vid.currentTime = hls.liveSyncPosition; toast('⚡ Jumped to live edge'); return; }
       const edge = _getLiveEdge(_vid);
       if (edge !== null) { _vid.currentTime = edge - 0.5; toast('⚡ Jumped to live edge'); }
     },
   };
 })();
 D.jumpLiveBtn.addEventListener('click', () => HealthMon.jumpToLive());
+if (D.btnCast) {
+  const castable = 'remote' in HTMLMediaElement.prototype || 'webkitShowPlaybackTargetPicker' in HTMLVideoElement.prototype;
+  D.btnCast.style.display = castable ? '' : 'none';
+  D.btnCast.addEventListener('click', () => {
+    const v = curPlayer instanceof HTMLVideoElement ? curPlayer : null;
+    if (!v) return toast('Cast unavailable for this source');
+    try { v.disableRemotePlayback = false; } catch {}
+    if (typeof v.webkitShowPlaybackTargetPicker === 'function') return v.webkitShowPlaybackTargetPicker();
+    if (v.remote?.prompt) v.remote.prompt().catch(() => toast('No cast device found'));
+    else toast('Cast unavailable for this source');
+  });
+}
+let userPaused = false;
+document.addEventListener('pause', e => { if (e.target instanceof HTMLMediaElement && !document.hidden) userPaused = true; }, true);
+document.addEventListener('play', () => { userPaused = false; }, true);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || appState !== 'playing') return;
+  const v = curPlayer instanceof HTMLVideoElement ? curPlayer : null;
+  if (v && v.paused && !userPaused) safePlay(v);
+  setTimeout(() => { if (D.jumpLiveBtn.classList.contains('on')) HealthMon.jumpToLive(); }, 1500);
+});
 
-/* ── Live Score Overlay (DOM-built, XSS-safe, parallel fetch) ── */
+/* ── Live Score Overlay ── */
 const ScoreBoard = (() => {
   if (!scoreTeam1 || !scoreTeam2) return { init() {} };
   const ESPN_LEAGUES = ['soccer/eng.1','soccer/esp.1','soccer/ger.1','soccer/fra.1','soccer/ita.1','soccer/uefa.champions','soccer/usa.1','basketball/nba','basketball/wnba','americanfootball/nfl','baseball/mlb','hockey/nhl'];
-  let _match = null, _pollTimer = null, _clockTimer = null;
-  let _localClock = 0, _clockRunning = false, _backoffMs = 45000, _prevScore = '', _paused = false;
+  let _match = null, _pollTimer = null, _clockTimer = null, _leaguePath = null;
+  let _localClock = 0, _countdown = false, _clockRunning = false, _backoffMs = 45000, _prevScore = '', _paused = false;
   let _sbRefs = null;
 
   function _fuzzy(a, b) {
-    a = String(a).toLowerCase().replace(/[^a-z0-9]/g, '');
-    b = String(b).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const norm = x => String(x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    a = norm(a); b = norm(b);
+    if (!a || !b) return 0; // nothing comparable (e.g. emoji-only) must never count as a match
     if (a === b) return 1;
     if (a.includes(b) || b.includes(a)) return 0.8;
     let hits = 0;
@@ -1964,9 +2598,11 @@ const ScoreBoard = (() => {
     if (!comps.length) return 0;
     const teams = (comps[0].competitors || []).map(c => c.team?.displayName || c.team?.shortDisplayName || '');
     if (teams.length < 2) return 0;
-    const s1 = Math.max(_fuzzy(scoreTeam1, teams[0]), _fuzzy(scoreTeam1, teams[1]));
-    const s2 = Math.max(_fuzzy(scoreTeam2, teams[0]), _fuzzy(scoreTeam2, teams[1]));
-    return s1 + s2;
+    // Each of our two teams must match a different side; both sides must match reasonably.
+    const a = _fuzzy(scoreTeam1, teams[0]), b = _fuzzy(scoreTeam2, teams[1]);
+    const c = _fuzzy(scoreTeam1, teams[1]), d = _fuzzy(scoreTeam2, teams[0]);
+    const p1 = Math.min(a, b) >= 0.4 ? a + b : 0, p2 = Math.min(c, d) >= 0.4 ? c + d : 0;
+    return Math.max(p1, p2);
   }
   function _parseESPN(data) {
     const events = data?.events || [];
@@ -1975,7 +2611,7 @@ const ScoreBoard = (() => {
       const s = _matchScore(ev);
       if (s > bestScore) { bestScore = s; best = ev; }
     }
-    if (!best || bestScore < 0.5) return null;
+    if (!best || bestScore < 0.9) return null;
     const comp = best.competitions[0];
     const status = best.status;
     const state = status?.type?.state || 'pre';
@@ -1999,19 +2635,22 @@ const ScoreBoard = (() => {
     };
   }
   async function _fetchESPN() {
-    const leagueList = scoreLeague ? ESPN_LEAGUES.filter(l => l.toLowerCase().includes(scoreLeague.toLowerCase())) : ESPN_LEAGUES;
+    const filtered = scoreLeague ? ESPN_LEAGUES.filter(l => l.toLowerCase().includes(scoreLeague.toLowerCase())) : ESPN_LEAGUES;
+    const leagueList = _leaguePath ? [_leaguePath] : (filtered.length ? filtered : ESPN_LEAGUES);
     const results = await Promise.allSettled(leagueList.map(async league => {
       const r = await fetchWithTimeout(`https://site.api.espn.com/apis/site/v2/sports/${league}/scoreboard`, CFG.FETCH_TO);
       if (!r.ok) throw new Error('bad');
       const data = await r.json();
       const parsed = _parseESPN(data);
       if (!parsed) throw new Error('no match');
+      parsed._path = league;
       return parsed;
     }));
     let best = null, bestScore = 0;
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value && r.value._matchScore > bestScore) { best = r.value; bestScore = r.value._matchScore; }
     }
+    _leaguePath = best?._path || null;
     return best;
   }
   async function _fetchTSDB() {
@@ -2028,17 +2667,25 @@ const ScoreBoard = (() => {
       for (const ev of events) {
         const hN = ev.strHomeTeam || '', aN = ev.strAwayTeam || '';
         const s = _fuzzy(scoreTeam2, hN) + _fuzzy(scoreTeam2, aN);
-        if (s > 0.5) return { state: 'post', homeTeam: hN, awayTeam: aN, homeScore: ev.intHomeScore || '0', awayScore: ev.intAwayScore || '0', homeLogo: '', awayLogo: '', clock: 'FT', isHT: false, isET: false, isPen: false };
+        const today = new Date().toISOString().slice(0, 10);
+        if (s >= 0.9 && ev.intHomeScore != null && ev.intAwayScore != null && ev.dateEvent === today) return { state: 'post', homeTeam: hN, awayTeam: aN, homeScore: ev.intHomeScore || '0', awayScore: ev.intAwayScore || '0', homeLogo: '', awayLogo: '', clock: 'FT', isHT: false, isET: false, isPen: false };
       }
     } catch {}
     return null;
   }
   function _applyManual() {
     if (!scoreManual.score) return null;
-    const parts = scoreManual.score.split('-');
+    const parts = scoreManual.score.split(/[-–:]/);
     return { state: 'in', homeTeam: scoreTeam1, awayTeam: scoreTeam2, homeScore: parts[0] || '0', awayScore: parts[1] || '0', homeLogo: '', awayLogo: '', clock: scoreManual.clock || '', isHT: false, isET: false, isPen: false };
   }
-  function _clockToSecs(s) { const p = String(s).split(':'); if (p.length === 2) return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); return parseInt(s, 10) || 0; }
+  function _clockToSecs(s) {
+    const raw = String(s ?? '').trim();
+    const espn = raw.match(/^(\d+)\s*['’](?:\s*\+\s*(\d+)\s*['’]?)?$/);
+    if (espn) return ((parseInt(espn[1], 10) || 0) + (parseInt(espn[2], 10) || 0)) * 60;
+    const p = raw.split(':');
+    if (p.length === 2) return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+    return parseInt(raw, 10) || 0;
+  }
   function _secsToDisplay(s) { const m = Math.floor(s / 60), sec = s % 60; return `${m}:${String(sec).padStart(2, '0')}`; }
 
   function _buildDom() {
@@ -2085,7 +2732,7 @@ const ScoreBoard = (() => {
 
     if (m.state === 'in' && !m.isHT) {
       const disp = _clockRunning ? _secsToDisplay(_localClock) : m.clock;
-      r.clock.textContent = `${disp}'`;
+      r.clock.textContent = _countdown ? String(disp) : `${String(disp).replace(/['’]$/, '')}'`;
     } else r.clock.textContent = '';
 
     if (goalFlash) {
@@ -2095,28 +2742,31 @@ const ScoreBoard = (() => {
       setTimeout(() => D.scoreOverlay.classList.remove('goal-flash'), 3000);
     }
   }
-  function _startClock(clockStr) {
+  function _startClock(clockStr, path = '') {
     clearInterval(_clockTimer);
+    _countdown = /basketball|americanfootball|hockey/.test(path || '');
     _localClock = _clockToSecs(clockStr);
     _clockRunning = true;
     _clockTimer = setInterval(() => {
       if (_paused) return;
-      _localClock++;
-      if (_sbRefs) _sbRefs.clock.textContent = `${_secsToDisplay(_localClock)}'`;
+      _localClock = _countdown ? Math.max(0, _localClock - 1) : _localClock + 1;
+      if (_sbRefs) _sbRefs.clock.textContent = _countdown ? _secsToDisplay(_localClock) : `${_secsToDisplay(_localClock)}'`;
     }, 1000);
   }
   function _stopClock() { clearInterval(_clockTimer); _clockTimer = null; _clockRunning = false; }
 
   async function _poll() {
+    clearTimeout(_pollTimer);
     if (_paused) return;
     try {
-      let result = await _fetchESPN();
+      let result = scoreManual.score ? _applyManual() : null; // an explicit score= always wins
+      if (!result) result = await _fetchESPN();
       if (!result) result = await _fetchTSDB();
       if (!result) result = _applyManual();
       if (result) {
         _match = result;
         _backoffMs = result.state === 'in' ? 45000 : 5 * 60 * 1000;
-        if (result.state === 'in' && !result.isHT) _startClock(result.clock);
+        if (result.state === 'in' && !result.isHT) _startClock(result.clock, result._path);
         else _stopClock();
         _render();
       } else _backoffMs = Math.min(_backoffMs * 2, 4 * 60 * 1000);
@@ -2130,10 +2780,11 @@ const ScoreBoard = (() => {
   return { init() { setTimeout(_poll, 500); } };
 })();
 
-/* ── EmbedManager (no clone; DOM health check replaced with timeouts + postMessage) ── */
+/* ── EmbedManager ── */
 const EmbedMgr = (() => {
-  let _s = [], _i = 0, _lt = null, _ht = null, _si = null, _g = 0, _t0 = 0, _fr = null;
+  let _s = [], _i = 0, _lt = null, _ht = null, _pt = null, _si = null, _g = 0, _t0 = 0, _fr = null;
   function _startSh() {
+    clearInterval(_si); // never leave an older shimmer interval running
     D.embedShimmer.classList.remove('hidden');
     D.shFill.style.width = '0%';
     let p = 0;
@@ -2159,16 +2810,18 @@ const EmbedMgr = (() => {
   }
   function _hideEE() { D.eeOverlay.classList.remove('active'); }
   function _allExhausted() {
+    failStreak++;
     GA.send('embed_exhausted', { source_count: _s.length, attempts: _i + 1, embed_url: (_s[0] || '').slice(0, 80) });
     _doneSh(false);
     EmbedMgr.unmount();
     if (streams.length > 1 && streams.findIndex(s => s.isFallback) !== curIdx) {
-      showSwBanner('Switching to next stream…');
-      setTimeout(() => { if (appState !== 'playing') switchNext('auto_embed_error'); }, 1500);
+      if (!silentFailover('silent_failover_embed', 'embed_exhausted')) showError('All embed sources failed');
     } else showFallback('embed_exhausted');
   }
   function _load(idx, gen) {
     if (typeof gen !== 'undefined' && gen !== _g) return;
+    const gen0 = gen ?? _g;
+    clearTimeout(_pt);
     _i = idx; _hideEE();
     const url = _s[idx];
     if (!url) { GA.send('embed_no_source', { source_index: idx }); _showEE('🔗', 'No source', 'This source is missing.', false, true); return; }
@@ -2177,13 +2830,12 @@ const EmbedMgr = (() => {
     _t0 = Date.now();
     GA.send('embed_attempt', { source_index: idx, source_count: _s.length, embed_url: url.slice(0, 80) });
 
-    // Rebuild iframe from scratch — cloning carries `about:blank` as src.
     const old = D.embedFrame;
     const fr = document.createElement('iframe');
     fr.id = 'embed-frame';
     fr.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share; accelerometer; gyroscope');
     fr.setAttribute('sandbox', CFG.SANDBOX);
-    fr.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
+    fr.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
     fr.setAttribute('allowfullscreen', '');
     fr.className = '';
     if (old && old.parentNode) old.parentNode.replaceChild(fr, old);
@@ -2194,13 +2846,13 @@ const EmbedMgr = (() => {
     fr.src = url;
 
     _lt = setTimeout(() => {
-      if (_i !== idx) return;
+      if (_i !== idx || _g !== gen0) return;
       _doneSh(false);
       GA.send('embed_timeout', { source_index: idx, embed_url: url.slice(0, 80), elapsed_ms: Date.now() - _t0 });
       const hasMore = _s.length > 1 && idx < _s.length - 1;
       if (hasMore) {
         _showEE('⏱️', 'Stream not working', 'The stream took too long to load.', true, false);
-        setTimeout(() => { if (_i === idx) { showSwBanner(); _load(idx + 1); } }, 2000);
+        _pt = setTimeout(() => { if (_g === gen0 && _i === idx) { showSwBanner(); _load(idx + 1, gen0); } }, 2000);
       } else _allExhausted();
     }, CFG.EMBED_TO);
   }
@@ -2217,6 +2869,8 @@ const EmbedMgr = (() => {
       GA.send('embed_load_success', { source_index: _i, embed_url: (_s[_i] || '').slice(0, 80), load_ms: Date.now() - _t0 });
       Perf.pStart = Date.now();
       appState = 'playing';
+      WakeMgr.on();
+      failStreak = 0;
       GA.snapshotDims();
       GA.startMilestones();
       setHealthDot(curIdx, 'green');
@@ -2231,15 +2885,15 @@ const EmbedMgr = (() => {
       const hasMore = _s.length > 1 && _i < _s.length - 1;
       if (hasMore) {
         _showEE('❌', 'Stream not working', "We couldn't load this source.", true, false);
-        setTimeout(() => { showSwBanner('Switching to next stream…'); _load(_i + 1); }, 1800);
+        _pt = setTimeout(() => { if (_g !== gen) return; showSwBanner('Switching to next stream…'); _load(_i + 1, gen); }, 1800);
       } else _allExhausted();
     }, { once: true });
   }
   window.addEventListener('message', e => {
     const d = e.data;
-    if (d && typeof d === 'object' && d.type === 'sp:ready' && appState === 'loading') {
+    if (e.source === _fr?.contentWindow && d && typeof d === 'object' && d.type === 'sp:ready' && appState === 'loading') {
       clearTimeout(_lt); _doneSh(true); if (_fr) _fr.classList.add('visible');
-      Perf.pStart = Date.now(); appState = 'playing'; GA.snapshotDims(); GA.startMilestones();
+      Perf.pStart = Date.now(); appState = 'playing'; WakeMgr.on(); failStreak = 0; GA.snapshotDims(); GA.startMilestones();
     }
   });
   return {
@@ -2248,12 +2902,14 @@ const EmbedMgr = (() => {
       _i = 0; _g = gen;
       GA.send('embed_mount', { source_count: _s.length, first_url: (_s[0] || '').slice(0, 80) });
       if (!_s.length) { showFallback(); return; }
+      document.getElementById('app').classList.add('embed-mode');
       D.embedHost.classList.add('active');
       _fr = D.embedFrame;
       _load(0, gen);
     },
     unmount() {
-      clearTimeout(_lt); clearTimeout(_ht); clearInterval(_si); _si = null; _g = -1;
+      clearTimeout(_lt); clearTimeout(_ht); clearTimeout(_pt); clearInterval(_si); _si = null; _g = -1;
+      document.getElementById('app').classList.remove('embed-mode');
       D.embedHost.classList.remove('active');
       D.eeOverlay.classList.remove('active');
       if (_fr) { try { _fr.src = 'about:blank'; } catch {} _fr.classList.remove('visible'); }
@@ -2268,10 +2924,6 @@ const EmbedMgr = (() => {
 /* ── Signed URL diagnostics ── */
 const expiredMora = new Set();
 
-// [signed-url] Diagnostic helper — logs host/path/expiry/seconds-remaining
-// for any Tencent-Cloud-style signed URL, without ever printing the secret
-// value itself. Called from loadStreams() for every mora/liveUrl entry and
-// again inside resolveStream() when the signed-direct fast path fires.
 function logSignedUrlInfo(url) {
   if (!isSignedUrl(url)) return;
   try {
@@ -2280,28 +2932,26 @@ function logSignedUrlInfo(url) {
     const isHex = tx && /^[0-9a-f]+$/i.test(tx) && !/^\d+$/.test(tx);
     const expSec = tx ? (isHex ? parseInt(tx, 16) : parseInt(tx, 10)) : null;
     const inSec = expSec ? expSec - Math.floor(Date.now() / 1000) : null;
-    console.info('[signed-url]', {
+    LOG('[signed-url]', {
       host: u.hostname,
       path: u.pathname,
       expires: expSec ? new Date(expSec * 1000).toISOString() : 'unknown',
       inSeconds: inSec,
-      secretParam: ['txSecret', 'wsSecret', 'auth_key', 'sign'].find(k => u.searchParams.has(k)) || 'none',
+      secretParam: ['txSecret', 'wsSecret', 'auth_key', 'sign', 'signature', 'token'].find(k => u.searchParams.has(k)) || 'none',
     });
-  } catch (e) { console.warn('[signed-url] parse failed', e); }
+  } catch (e) { LOG('[signed-url] parse failed', e); }
 }
 
-// [signed-url] signedTimestamp() now understands Tencent-Cloud-style
-// expiry params in priority order: txTime/wsTime (hex-or-decimal),
-// expire/expires/e (decimal seconds, or ms if > 1e12), then the original
-// `t` decimal-or-hex heuristic. Call sites are unchanged — still returns
-// Unix seconds or null.
 function signedTimestamp(url) {
   try {
     const u = new URL(url);
     const parseHexOrDec = raw => {
       if (!raw) return NaN;
-      if (/^[0-9]+$/.test(raw)) return Number(raw);
-      if (/^[0-9a-f]+$/i.test(raw)) return parseInt(raw, 16);
+      const ok = v => Number.isFinite(v) && v > 1e9 && v < 4e9; // a plausible unix timestamp
+      const hex = /^[0-9a-f]+$/i.test(raw) ? parseInt(raw, 16) : NaN; // txTime / wsTime are hex
+      const dec = /^[0-9]+$/.test(raw) ? Number(raw) : NaN;
+      if (ok(hex)) return hex;
+      if (ok(dec)) return dec;
       return NaN;
     };
 
@@ -2329,10 +2979,8 @@ function signedTimestamp(url) {
 function checkSignedExpiry() {
   moraP.forEach((url, i) => {
     const t = signedTimestamp(url);
-    if (t && Date.now() / 1000 > t + 3600) { expiredMora.add(i); console.warn('[player] signed URL may be expired', { index: i + 1, t }); }
+    if (t && Date.now() / 1000 > t + 3600) { expiredMora.add(i); LOG('[player] signed URL may be expired', { index: i + 1, t }); }
   });
-  // [signed-url] User-visible warning + red health dot (not just a console
-  // log) the moment a signed URL is already past its own expiry timestamp.
   moraP.forEach((url, i) => {
     if (!isSignedUrl(url)) return;
     const t = signedTimestamp(url);
@@ -2345,8 +2993,10 @@ function checkSignedExpiry() {
   });
 }
 
-/* ── Adapters (type-aware ordering, DRM filter) ── */
+/* ── Adapters ── */
 let iframeFallbackUrl = '';
+const preconnectedOrigins = new Set();
+function preconnectStream(url) { try { const origin = new URL(url).origin; if (preconnectedOrigins.has(origin)) return; preconnectedOrigins.add(origin); const link = document.createElement('link'); link.rel = 'preconnect'; link.href = origin; link.crossOrigin = ''; document.head.appendChild(link); } catch {} }
 const ADAPTERS = [
   {
     name: 'native-hls', pri: 0, supportsDrm: false,
@@ -2354,19 +3004,24 @@ const ADAPTERS = [
     async load() {},
     init(hid, s) {
       return withTO(new Promise((res, rej) => {
-        const v = newVid({ controls: true, muted: true, playsinline: true });
-        v.src = s.url;
+        const v = newVid({ controls: true, muted: true, playsinline: true, preload: 'auto' });
+        v.setAttribute('webkit-playsinline', '');
+        v.setAttribute('playsinline', '');
+        v.src = workerUrlFor(s.url, true) || s.url; // wrap=1: Worker routes nested playlists/segments back through itself
         document.getElementById(hid).appendChild(v);
+        try { v.load(); } catch {}
         curPlayer = v; instances.push(v);
         GA.attachVideo(v, 'native-hls');
-        v.addEventListener('loadedmetadata', () => { safePlay(v); res(); }, { once: true });
+        const ready = () => { safePlay(v); res(); };
+        v.addEventListener('loadedmetadata', ready, { once: true });
+        v.addEventListener('canplay', ready, { once: true });
         v.addEventListener('error', () => rej(new Error('Native HLS failed')), { once: true });
       }), isSignedUrl(s.url) ? CFG.SIGNED_PLAYER_TO : 20000);
     },
   },
   {
     name: 'jwplayer', pri: 1, supportsDrm: true,
-    supports: () => true, // load() pulls the library in
+    supports: () => true,
     async load() { await loadSc('https://cdn.jwplayer.com/libraries/IDzF9Zmk.js'); },
     init(hid, s) {
       return withTO(new Promise((res, rej) => {
@@ -2403,7 +3058,7 @@ const ADAPTERS = [
   },
   {
     name: 'iframe-hls', pri: 2, supportsDrm: false,
-    supports: s => s.type === 'hls' && !s.drm && !CFG.OWN_PROXY,
+    supports: s => s.type === 'hls' && !s.drm,
     async load() {},
     init(hid, s) {
       return withTO(new Promise((res, rej) => {
@@ -2428,7 +3083,7 @@ const ADAPTERS = [
     supports: () => true,
     async load() { await loadSc('https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.min.js'); },
     init(hid, s) {
-      return withTO(new Promise(async (res, rej) => {
+      return withTO(new Promise(async (res, rej) => { try {
         let done = false;
         const D2 = fn => { if (!done) { done = true; fn(); } };
         const v = newVid({});
@@ -2439,20 +3094,18 @@ const ADAPTERS = [
         instances.push(p); curPlayer = v;
         GA.attachVideo(v, 'shaka');
         p.configure({
-          streaming: { retryParameters: { maxAttempts: 5, baseDelay: 1000, backoffFactor: 2, fuzzFactor: .5, timeout: 30000 }, bufferingGoal: 30, rebufferingGoal: 2, ignoreTextStreamFailures: true, stallEnabled: true, stallThreshold: 1, stallSkip: .1 },
-          manifest: { retryParameters: { maxAttempts: 5, baseDelay: 1000, backoffFactor: 2 }, dash: { ignoreMinBufferTime: true } },
+          streaming: { retryParameters: { maxAttempts: 4, baseDelay: 500, backoffFactor: 1.5, fuzzFactor: .2, timeout: 10000 }, bufferingGoal: 30, rebufferingGoal: 2, ignoreTextStreamFailures: true, stallEnabled: true, stallThreshold: 1, stallSkip: .1 },
+          manifest: { retryParameters: { maxAttempts: 3, baseDelay: 500, backoffFactor: 1.5, timeout: 8000 }, dash: { ignoreMinBufferTime: true } },
         });
         p.addEventListener('error', e => { GA.send('shaka_error', { error_code: e.detail?.code || 0 }); });
         p.getNetworkingEngine().registerRequestFilter((t, req) => {
-          // [signed-url] The HMAC is edge-bound — never let Shaka's own proxy
-          // rewrite touch a signed request.
           if (req.uris.some(uri => isSignedUrl(uri))) return;
-          if (refP) req.headers['Referer'] = refP;
-          if (CFG.OWN_PROXY) req.uris = req.uris.map(uri => rewriteProxyUrl(uri));
+          req.uris = req.uris.map(uri => workerUrlFor(uri) || uri); // Referer-gated hosts -> Worker
+          // 'Referer' is a forbidden request header in browsers; use the worker's &ref= instead.
         });
         if (s.drm) p.configure({ drm: { clearKeys: { [s.drm.keyId]: s.drm.key } } });
         try {
-          await p.load(CFG.OWN_PROXY && !isSignedUrl(s.url) ? rewriteProxyUrl(s.url) : s.url);
+          await p.load(s.url);
           setTimeout(() => safePlay(v), 100);
           const tr = p.getVariantTracks().filter(t => t.type === 'variant');
           const heights = [...new Set(tr.map(t => t.height || 0))].filter(Boolean).sort((a, b) => a - b);
@@ -2473,75 +3126,95 @@ const ADAPTERS = [
           hideQuality();
           D2(() => res());
         } catch (e) {
-          // [signed-url] Signed URLs must never fall back to the CORS proxy
-          // retry — the proxy would strip/reorder the query string and
-          // invalidate the HMAC.
-          if (!isSignedUrl(s.url) && !CFG.OWN_PROXY && /TypeError|failed to fetch|network/i.test(String(e?.message || e))) {
+          if (!isSignedUrl(s.url) && /TypeError|failed to fetch|network/i.test(String(e?.message || e))) {
             GA.send('cors_detected', { adapter_name: 'shaka', details: String(e?.message || e) });
             try { toast('Retrying via proxy…'); GA.send('proxy_retry', { adapter_name: 'shaka', target_url: s.url.slice(0, 120) }); await p.load(rewriteProxyUrl(s.url, true)); D2(() => res()); return; } catch (e2) { e = e2; }
           }
           D2(() => rej(new Error(`Shaka: ${e.message}`)));
         }
-      }));
+      } catch (e0) { rej(e0); } }));
     },
   },
   {
     name: 'hlsjs', pri: 3, supportsDrm: false,
-    supports: s => s.type === 'hls' && !s.drm,
+    supports: s => s.type === 'hls' && !s.drm && !isIOS(),
     async load() { await loadSc('https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js'); },
     init(hid, s) {
       return withTO(new Promise((res, rej) => {
         if (!Hls.isSupported()) return rej(new Error('HLS.js: MSE not supported'));
-        // [signed-url] Signed URLs must never be rewritten or proxied.
         const SIGNED = isSignedUrl(s.url);
         const v = newVid({});
         document.getElementById(hid).appendChild(v);
         curPlayer = v;
         GA.attachVideo(v, 'hlsjs');
-        let useFallbackProxy = false, retriedProxy = false;
+        let useFallbackProxy = false, retriedProxy = false, signedRetries = 0, postFatal = 0;
         const h = new Hls({
-          enableWorker: true, lowLatencyMode: true, backBufferLength: 90,
-          maxBufferLength: 30, maxMaxBufferLength: 600,
+          enableWorker: true, lowLatencyMode: false, backBufferLength: 30,
+          maxBufferLength: 20, maxMaxBufferLength: 60,
+          capLevelToPlayerSize: true, liveSyncDurationCount: 3,
+          maxLiveSyncPlaybackRate: 1.1,
+          startLevel: -1, abrEwmaFastLive: 3.0, abrEwmaSlowLive: 9.0,
+          ...(navigator.connection?.effectiveType && /^(2g|3g|slow-2g)$/.test(navigator.connection.effectiveType) ? { maxBufferLength: 10, maxMaxBufferLength: 30 } : {}),
           fragLoadingTimeOut: 12000, fragLoadingMaxRetry: 3,
           manifestLoadingTimeOut: 12000, manifestLoadingMaxRetry: 3,
           startFragPrefetch: true, nudgeOffset: .3, nudgeMaxRetry: 5,
           autoStartLoad: true, startPosition: -1,
           xhrSetup: (xhr, url) => {
-            if (SIGNED) return; // never rewrite a signed request URL
+            if (SIGNED) return;
             const alreadyOwn = CFG.OWN_PROXY && String(url).startsWith(CFG.OWN_PROXY);
             const alreadyFallback = /(?:corsproxy\.io|codetabs\.com|allorigins\.win)/i.test(String(url));
-            const target = alreadyOwn || alreadyFallback ? url : (useFallbackProxy ? rewriteProxyUrl(url, true) : rewriteProxyUrl(url));
+            // Referer-gated hosts (strmd.st): EVERY request (manifest, nested playlists, .ts, keys) goes
+            // through the Worker, which sets Referer/Origin. Without OWN_PROXY, try the header directly.
+            if (!alreadyOwn && !alreadyFallback) {
+              const wu = workerUrlFor(url);
+              if (wu) { try { xhr.open('GET', wu, true); } catch {} return; }
+              const ref = refererFor(url);
+              if (ref) { try { xhr.setRequestHeader('Referer', ref); } catch {} }
+            }
+            const isPl = /\.(m3u8|mpd)(\?|$)/i.test(String(url));
+            const target = alreadyOwn || alreadyFallback || (CFG.OWN_PROXY && !isPl) ? url : (useFallbackProxy ? rewriteProxyUrl(url, true) : rewriteProxyUrl(url));
             if (target !== url) { try { xhr.open('GET', target, true); } catch {} }
           },
         });
         instances.push(h);
         let done = false;
-        h.on(Hls.Events.FRAG_LOADED, (e, d) => GA.sendSampled('hls_fragment_loaded', 'frag', { frag_size: d.stats?.total || 0, adapter_name: 'hlsjs' }, 4000));
+        h.on(Hls.Events.FRAG_LOADED, (e, d) => { postFatal = 0; Perf.bytes += Number(d.stats?.total || 0); GA.sendSampled('hls_fragment_loaded', 'frag', { frag_size: d.stats?.total || 0, adapter_name: 'hlsjs', total_bytes: Perf.bytes }, 6000); });
         h.on(Hls.Events.LEVEL_SWITCHED, (e, d) => GA.send('quality_changed', { to_quality: h.levels[d.level]?.height ? `${h.levels[d.level].height}p` : String(d.level), trigger_source: 'auto' }));
+        h.on(Hls.Events.LEVEL_LOADED, (_, d) => {
+          if (d.details?.partList?.length && !h.config.lowLatencyMode) h.config.lowLatencyMode = true;
+        });
         h.on(Hls.Events.ERROR, (_, d) => {
           if (d.fatal) {
             GA.send('hlsjs_fatal_error', { error_type: d.type, error_details: d.details });
+            if (done) { // already playing: try to recover, then move on instead of freezing
+              if (++postFatal > 4 || (d.type !== Hls.ErrorTypes.NETWORK_ERROR && d.type !== Hls.ErrorTypes.MEDIA_ERROR)) {
+                postFatal = 0;
+                if (!silentFailover('silent_failover_fatal', 'hls_fatal')) showError('Playback error');
+                return;
+              }
+              showSwBanner('Reconnecting…');
+              try { d.type === Hls.ErrorTypes.MEDIA_ERROR ? h.recoverMediaError() : h.startLoad(); } catch {}
+              return;
+            }
             if (!done) {
-              // [signed-url] Signed URLs must never trigger useFallbackProxy,
-              // retriedProxy, or iframeFallbackUrl — wrap the entire
-              // corsError block so it's skipped outright for signed streams.
               if (!SIGNED) {
                 const responseCode = d.response?.code;
                 const corsError = (responseCode === 0 && d.networkDetails?.loaded === 0) || (d.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR && responseCode === 0) || /cors|blocked|failed to fetch/i.test(String(d.details || d.error || ''));
                 if (corsError) {
                   GA.send('cors_detected', { adapter_name: 'hlsjs', details: String(d.details || '') });
-                  if (!retriedProxy && !CFG.OWN_PROXY) {
+                  if (!retriedProxy) {
                     retriedProxy = true; useFallbackProxy = true; iframeFallbackUrl = s.url;
                     toast('Retrying via proxy…'); GA.send('proxy_retry', { adapter_name: 'hlsjs', target_url: s.url.slice(0, 120) });
                     h.stopLoad(); h.loadSource(rewriteProxyUrl(s.url, true)); h.startLoad(); return;
                   }
-                  if (!CFG.OWN_PROXY && retriedProxy) iframeFallbackUrl = s.url;
+                  if (retriedProxy) iframeFallbackUrl = s.url;
                 }
                 if (d.type === Hls.ErrorTypes.NETWORK_ERROR && !corsError) { h.startLoad(); return; }
               } else if (d.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                // Still allow hls.js's own network retry for signed streams —
-                // just never route it through a proxy or iframe fallback.
-                h.startLoad(); return;
+                // Signed URL: 401/403/404/410 or CORS (code 0) will not fix itself -> fail fast so the next source is tried.
+                const rc = d.response?.code;
+                const hard = rc === 0 || [401, 403, 404, 410].includes(rc);
+                if (!hard && signedRetries++ < 2) { h.startLoad(); return; }
               }
               if (d.type === Hls.ErrorTypes.MEDIA_ERROR) { h.recoverMediaError(); return; }
               done = true;
@@ -2558,10 +3231,12 @@ const ADAPTERS = [
           if (done) return; done = true;
           const heights = h.levels.map(l => l.height || 0).filter((val, i, arr) => val > 0 && arr.indexOf(val) === i).sort((a, b) => a - b);
           const plyrOpts = {};
+          const savedQ = heights.includes(Prefs.load('sp_quality', 0)) ? Prefs.load('sp_quality', 0) : 0;
+          if (savedQ) { const qi = h.levels.findIndex(l => l.height === savedQ); if (qi >= 0) h.currentLevel = qi; }
           if (heights.length) {
             plyrOpts.quality = {
-              default: 0, options: [0, ...heights], forced: true,
-              onChange: q => { if (q === 0) { h.currentLevel = -1; return; } const idx = h.levels.findIndex(l => l.height === q); if (idx >= 0) h.currentLevel = idx; },
+              default: savedQ, options: [0, ...heights], forced: true,
+              onChange: q => { Prefs.save('sp_quality', q); if (q === 0) { h.currentLevel = -1; return; } const idx = h.levels.findIndex(l => l.height === q); if (idx >= 0) h.currentLevel = idx; },
             };
             plyrOpts.i18n = { qualityLabel: { 0: 'Auto' } };
           }
@@ -2607,7 +3282,6 @@ const ADAPTERS = [
         p.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED, e => GA.send('quality_changed', { from_quality: String(e.oldQuality), to_quality: String(e.newQuality), trigger_source: 'auto' }));
         p.on(dashjs.MediaPlayer.events.ERROR, e => { if (!done) { done = true; GA.send('dashjs_error', { error_message: e.message || 'unknown' }); rej(new Error(`Dash.js: ${e.message || 'Unknown'}`)); } });
         if (s.drm) p.setProtectionData({ 'org.w3.clearkey': { clearkeys: { [s.drm.keyId]: s.drm.key } } });
-        // [signed-url] Never proxy-rewrite a signed manifest URL for dash.js.
         p.initialize(v, s.url, true);
       }), isSignedUrl(s.url) ? CFG.SIGNED_PLAYER_TO : CFG.PLAYER_TO);
     },
@@ -2669,10 +3343,12 @@ const ADAPTERS = [
 async function playStream(stream, gen) {
   hideError();
   hideTapToPlay();
+  if (stream?.url) preconnectStream(stream.url);
   clearHost();
   D.initPh.style.display = 'none';
 
   if (stream.type === 'embed') {
+    appState = 'loading';
     setLoading(false);
     EmbedMgr.mount(stream.embedUrls?.length ? stream.embedUrls : [stream.url], gen);
     setBadge(stream);
@@ -2701,17 +3377,16 @@ async function playStream(stream, gen) {
     return a.pri - b.pri;
   });
 
-  // [signed-url] The HMAC is edge-bound. Only hls.js and native HLS may
-  // touch it — this is what stops JWPlayer, Shaka, Video.js, iframe-hls
-  // and the plain native adapter from ever seeing the URL and, in the
-  // case of adapters that call new URL()/rebuild query strings, stripping
-  // or reordering it.
+  // [signed-url] Only hls.js and native HLS may touch an edge-bound signed URL.
   if (isSignedUrl(stream.url)) {
-    cands = cands.filter(a => a.name === 'hlsjs' || a.name === 'native-hls');
+    cands = cands.filter(a => a.name === 'hlsjs' || a.name === 'native-hls' || (stream.type === 'dash' && a.name === 'shaka'));
     GA.send('signed_url_adapter_whitelist', { allowed: cands.map(a => a.name).join(',') });
   }
+  if (stream.type === 'hls' && !isIOS() && cands.some(a => a.name === 'hlsjs' || a.name === 'native')) cands = cands.filter(a => a.name !== 'shaka');
+  if (stream.type === 'dash' && cands.some(a => a.name === 'shaka')) cands = cands.filter(a => a.name !== 'dashjs');
 
   let ok = false, lastE = '', okAdapter = '';
+  const attemptedAdapters = [];
   const total = cands.length;
   let ai = 0;
   const playT0 = Date.now();
@@ -2720,6 +3395,7 @@ async function playStream(stream, gen) {
   for (const adapter of cands) {
     if (gen !== playGen) return;
     ai++;
+    attemptedAdapters.push(adapter.name);
     const pct = Math.round((ai / (total + 1)) * 90);
     setLoading(true, ai === 1 ? 'Loading stream…' : `Trying ${adapter.name}…`, pct);
     const wid = 'ph_' + Date.now();
@@ -2729,6 +3405,7 @@ async function playStream(stream, gen) {
     D.host.appendChild(wrap);
     const adT0 = Date.now();
     GA.send('adapter_attempt', { adapter_name: adapter.name, attempt_number: ai, total_adapters: total });
+    const before = instances.length;
     try {
       await adapter.load();
       if (gen !== playGen) return;
@@ -2739,12 +3416,16 @@ async function playStream(stream, gen) {
     } catch (e) {
       lastE = e?.message || 'Unknown';
       GA.send('adapter_fail', { adapter_name: adapter.name, attempt_number: ai, error_message: lastE.slice(0, 120), elapsed_ms: Date.now() - adT0 });
+      instances.splice(before).forEach(destroyInstance);
+      curPlayer = null;
+      curPlyr = null;
       try { D.host.removeChild(wrap); } catch {}
       if (ai < total) showSwBanner('Trying another source…');
     }
   }
 
   if (gen !== playGen) return;
+  GA.send('adapter_funnel', { attempted: attemptedAdapters, succeeded: okAdapter || null, attempts: ai, total_ms: Date.now() - playT0 });
 
   if (!ok) {
     hideSwBanner();
@@ -2752,11 +3433,17 @@ async function playStream(stream, gen) {
     setLoading(false);
     setBadge(null);
     GA.send('adapter_all_failed', { adapters_tried: ai, last_error: lastE.slice(0, 120), total_ms: Date.now() - playT0 });
+    if (!curStream?.isFallback && silentFailover('silent_failover', lastE)) return;
     showError(lastE);
   } else {
     hideSwBanner();
     Perf.pStart = Date.now();
     appState = 'playing';
+    WakeMgr.on();
+    AmbientGlow.start();
+    setChannelMark(stream);
+    announce(`Now playing ${stream.customLabel || streamLabel(curIdx).name}`);
+    failStreak = 0;
     const needOv = !CFG.SELF_CTRL.has(okAdapter) && curPlyr === null;
     setOverlay(needOv);
     if (needOv) D.pbBar.classList.add('on');
@@ -2765,8 +3452,8 @@ async function playStream(stream, gen) {
     setActivBtn(curIdx);
     ThumbMgr.hide();
     if (curPlayer instanceof HTMLVideoElement && !curPlyr) {
-      const savedVol = Prefs.getSavedVol();
-      const savedMute = Prefs.getSavedMute();
+      const savedVol = Prefs.getSavedVol(curIdx);
+      const savedMute = Prefs.getSavedMute(curIdx);
       curPlayer.volume = savedMute ? 0 : savedVol / 100;
       curPlayer.muted = savedMute;
       D.volSl.value = String(savedMute ? 0 : savedVol);
@@ -2774,7 +3461,10 @@ async function playStream(stream, gen) {
     if (curPlayer instanceof HTMLVideoElement) HealthMon.start(curPlayer, curIdx);
     GA.snapshotDims();
     GA.startMilestones();
-    GA.send('stream_play_started', { stream_type: stream.type, adapter_name: okAdapter, time_to_play_ms: Date.now() - playT0, has_drm: !!(stream.drm), plyr_active: curPlyr !== null });
+    const ttff = Date.now() - playT0;
+    GA.send('perf_ttff_ms', { stream_type: stream.type, adapter_name: okAdapter, ms: ttff, bytes_loaded: Perf.bytes });
+    if (/^silent_failover/.test(lastPlayTrigger)) GA.send('silent_failover_success', { to_index: curIdx + 1, time_ms: ttff });
+    GA.send('stream_play_started', { stream_type: stream.type, adapter_name: okAdapter, time_to_play_ms: ttff, has_drm: !!(stream.drm), plyr_active: curPlyr !== null });
   }
 }
 
@@ -2824,44 +3514,143 @@ function showFallback(reason = 'all_failed') {
 }
 
 /* ── loadStreams ── */
+let lateJobs = [];
+function appendLateStreams(entries) {
+  if (!Array.isArray(entries) || !entries.length || !streams.length) return;
+  const have = new Set(streams.map(s => s.url));
+  const fresh = entries.filter(e => e && e.url && !have.has(e.url));
+  if (!fresh.length) return;
+  fresh.forEach(e => { try { Prefetch.preconnect(e.url); } catch {} });
+  // Same ranking as loadStreams: priority HLS, HLS, DASH, then embeds. Late m3u8 sources are inserted
+  // ahead of iframe wrappers (not appended behind them); failedStreams/curIdx are re-indexed.
+  const rank = s => (s?.isPriority && s.type === 'hls') ? -1 : s?.type === 'hls' ? 0 : s?.type === 'dash' ? 1 : 2;
+  let at = streams.length;
+  fresh.slice().sort((a, b) => rank(a) - rank(b)).forEach(e => {
+    const fbIdx = streams.findIndex(s => s.isFallback);
+    const limit = fbIdx >= 0 ? fbIdx : streams.length;
+    let pos = limit;
+    for (let i = 0; i < limit; i++) { if (rank(streams[i]) > rank(e)) { pos = i; break; } }
+    streams.splice(pos, 0, e);
+    if (curIdx >= pos) curIdx++;
+    const shifted = [...failedStreams].map(i => i >= pos ? i + 1 : i);
+    failedStreams.clear(); shifted.forEach(i => failedStreams.add(i));
+    at = Math.min(at, pos);
+  });
+  buildBtns(streams); setActivBtn(curIdx);
+  GA.send('streams_late_added', { count: fresh.length });
+  // Direct m3u8 beats an iframe wrapper: if the player is still on an embed early on, hop to the new HLS.
+  const freshHls = streams.findIndex(s => fresh.includes(s) && s.type === 'hls');
+  if (streams[curIdx]?.isFallback || appState === 'error') go(at);
+  else if (freshHls >= 0 && streams[curIdx]?.type === 'embed' && Perf.sec() < 12) go(freshHls);
+  else toast(`+${fresh.length} more source${fresh.length > 1 ? 's' : ''}`);
+}
 async function loadStreams() {
+  lateJobs = [];
   const result = [];
   setLoading(true, 'Finding best stream…', 10);
   GA.send('streams_load_start', { mora_count: moraP.length, embed_count: embedP.length, one_count: oneP.length, xoilac_count: xoilacP.length, live_url_count: liveUrlP.length });
   const t0 = Date.now();
 
-  console.info('[player] loading parsed mora streams', moraP);
+  LOG('[player] loading parsed mora streams', moraP);
   moraP.forEach(logSignedUrlInfo);
   liveUrlP.forEach(logSignedUrlInfo);
   const combinedRaw = [...moraP, ...liveUrlP];
-  const results = await Promise.allSettled(combinedRaw.map(url => resolveStream(url)));
+  const onePromise = oneP.length
+    ? Promise.allSettled(oneP.map(u => resolveOneball(u)))
+    : Promise.resolve([]);
+  const xoilacPromise = xoilacP.length
+    ? Promise.allSettled(xoilacP.map(u => resolveXoilac(u)))
+    : Promise.resolve([]);
+  // Don't let one slow source hold up playback: start shortly after the first source resolves
+  // (or at START_DEADLINE) and add the slow ones when they arrive (see appendLateStreams).
+  const sleepT = ms => new Promise(r => setTimeout(() => r('timeout'), ms));
+  const moraSlots = new Array(combinedRaw.length);
+  let graceRes; const grace = new Promise(r => { graceRes = r; });
+  const moraJobs = combinedRaw.map((url, i) => resolveStream(url).then(
+    v => { moraSlots[i] = { status: 'fulfilled', value: v }; if (!oneP.length && !xoilacP.length && v) setTimeout(() => graceRes('grace'), CFG.START_GRACE); },
+    e => { moraSlots[i] = { status: 'rejected', reason: e }; }));
+  const moraAll = Promise.all(moraJobs);
+  await Promise.race([moraAll, grace, sleepT(CFG.START_DEADLINE)]);
+  const results = combinedRaw.map((_, i) => moraSlots[i]); // undefined = still resolving
+  const pendingIdx = combinedRaw.map((_, i) => i).filter(i => !moraSlots[i]);
+  let moraLate = pendingIdx.length
+    ? moraAll.then(() => pendingIdx.map(i => (moraSlots[i] && moraSlots[i].status === 'fulfilled' && moraSlots[i].value) ? { ...moraSlots[i].value, originalUrl: combinedRaw[i] } : null).filter(Boolean))
+    : null;
+  const oneEntries = rs => rs.flatMap(r => (r.status === 'fulfilled' && Array.isArray(r.value)) ? r.value : []);
   const mora = [];
   results.forEach((r, i) => {
-    if (r.status === 'fulfilled' && r.value) mora.push({ ...r.value, originalUrl: combinedRaw[i] });
-    else { console.warn(`mora[${i}] failed:`, r.reason?.message); GA.send('stream_resolve_fail', { stream_index: i, reason: r.reason?.message || 'unknown' }); }
+    if (!r) return;
+    if (r.status === 'fulfilled' && r.value) {
+      mora.push({ ...r.value, originalUrl: combinedRaw[i] });
+      Prefetch.preconnect(r.value.url); Prefetch.manifest(r.value.url);
+    }
+    else { LOG(`mora[${i}] failed:`, r.reason?.message); GA.send('stream_resolve_fail', { stream_index: i + 1, reason: r.reason?.message || 'unknown' }); }
   });
 
   embedP.forEach((url, index) => {
     result.push({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Stream ${index + 1}` });
   });
 
-  xoilacP.forEach((url, index) => {
-    result.push({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Xoilac ${index + 1}` });
-  });
+  // Both timers start together, so Xoilac gets the same deadline as OneBall instead of the leftovers.
+  const raceDeadline = p => Promise.race([p, sleepT(Math.max(1500, CFG.START_DEADLINE - (Date.now() - t0)))]);
+  const oneRace = oneP.length ? raceDeadline(onePromise) : null;
+  const xoilacRace = xoilacP.length ? raceDeadline(xoilacPromise) : null;
 
   if (oneP.length) {
-    const oneResults = await Promise.allSettled(oneP.map(u => resolveOneball(u)));
+    let oneResults = await oneRace;
+    let oneLate = null;
+    if (oneResults === 'timeout') { oneLate = onePromise; oneResults = []; }
+    lateJobs.oneLate = oneLate;
     oneResults.forEach((r, i) => {
-      if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) result.push(...r.value);
-      else { console.warn(`one[${i}] failed:`, r.reason?.message); GA.send('oneball_page_fail', { page_index: i, page_url: (oneP[i] || '').slice(0, 80) }); }
+      if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+        result.push(...r.value);
+        const first = r.value.find(x => x.type === 'hls');
+        if (first) Prefetch.preconnect(first.url);
+      }
+      else { LOG(`one[${i}] failed:`, r.reason?.message); GA.send('oneball_page_fail', { page_index: i, page_url: (oneP[i] || '').slice(0, 80) }); }
     });
   }
 
-  if (isIOS()) {
-    const hls = mora.filter(s => s.type === 'hls');
-    const oth = mora.filter(s => s.type !== 'hls' && s.type !== 'dash');
-    result.unshift(...hls, ...oth);
-  } else result.unshift(...mora);
+  if (xoilacP.length) {
+    let xoilacResults = await xoilacRace;
+    let xoilacLate = null;
+    if (xoilacResults === 'timeout') { xoilacLate = xoilacPromise; xoilacResults = []; }
+    lateJobs.xoilacLate = xoilacLate;
+    xoilacResults.forEach((r, i) => {
+      if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+        result.push(...r.value);
+        const first = r.value.find(x => x.type === 'hls');
+        if (first) Prefetch.preconnect(first.url);
+      }
+      else { LOG(`xoilac[${i}] failed:`, r.reason?.message); GA.send('xoilac_page_fail', { page_index: i, page_url: (xoilacP[i] || '').slice(0, 80) }); }
+    });
+  }
+
+  // Nothing playable yet? Then there is nothing to start with, so wait for the slow sources after all.
+  const _oneLate = lateJobs.oneLate || null; const _xoilacLate = lateJobs.xoilacLate || null; lateJobs = [];
+  if (!mora.length && !result.length && (moraLate || _oneLate || _xoilacLate)) {
+    setLoading(true, 'Still looking for a stream…', 40);
+    if (moraLate) mora.push(...(await moraLate));
+    if (_oneLate) result.push(...oneEntries(await _oneLate));
+    if (_xoilacLate) result.push(...oneEntries(await _xoilacLate));
+    moraLate = null;
+  } else {
+    if (moraLate) lateJobs.push(moraLate);
+    if (_oneLate) lateJobs.push(_oneLate.then(oneEntries));
+    if (_xoilacLate) lateJobs.push(_xoilacLate.then(oneEntries));
+  }
+
+  // Always present direct media before iframe wrappers.  This is especially
+  // important on iOS: a nested ?u=... iframe may contain a perfectly usable
+  // HLS URL, so the native m3u8 source must be tried first.
+  const allSources = [...mora, ...result];
+  const mediaRank = s => (s?.isPriority && s.type === 'hls') ? -1 : s?.type === 'hls' ? 0 : s?.type === 'dash' ? 1 : 2;
+  const directFirst = allSources
+    .map((s, order) => ({ s, order }))
+    .sort((a, b) => mediaRank(a.s) - mediaRank(b.s) || a.order - b.order)
+    .map(x => x.s);
+  result.length = 0;
+  result.push(...directFirst);
 
   if (CFG.FALLBACK_URL && safe(CFG.FALLBACK_URL)) {
     result.push({ type: 'hls', url: CFG.FALLBACK_URL, originalUrl: CFG.FALLBACK_URL, customLabel: 'Backup channel', isFallback: true });
@@ -2883,8 +3672,8 @@ function switchNext(trigger = 'button') {
   const nextIdx = getNextPreferredIndex(curIdx);
   GA.send('stream_switched', { from_index: curIdx + 1, to_index: nextIdx + 1, from_name: streamLabel(curIdx).name, to_name: streamLabel(nextIdx).name, trigger_source: trigger, watch_sec_before_switch: Perf.sec() });
   Perf.switches++;
-  go(nextIdx);
-  toast(`${streamLabel(nextIdx).icon} ${streamLabel(nextIdx).name}`);
+  go(nextIdx, null, trigger);
+  if (!/^silent_failover/.test(trigger)) toast(`${streamLabel(nextIdx).icon} ${streamLabel(nextIdx).name}`);
 }
 function refresh(trigger = 'button') {
   if (!curStream) return;
@@ -2894,16 +3683,14 @@ function refresh(trigger = 'button') {
   go(curIdx);
   toast('↺ Refreshed');
 }
-async function go(idx) {
+async function go(idx, streamOverride = null, trigger = 'manual') {
   if (!_isOnline) { _offlineResumeNeeded = true; return; }
   cancelAutoNextSwitch('navigation');
-  if (!streams.length) return;
+  if (!streams.length && !streamOverride) return;
   if (curStream && Perf.pStart) GA.send('stream_play_ended', { watch_sec: Perf.sec() });
-  idx = Math.max(0, Math.min(idx, streams.length - 1));
+  idx = streamOverride && !streams.length ? Math.max(0, idx) : Math.max(0, Math.min(idx, streams.length - 1));
 
-  // [signed-url] Don't burn an adapter attempt on a dead signature — check
-  // before touching curIdx/curStream/playGen so a stale expired link never
-  // reaches playStream() at all.
+  // [signed-url] Skip a dead signature before touching any state.
   {
     const target = streams[idx];
     if (target && isSignedUrl(target.originalUrl)) {
@@ -2923,13 +3710,16 @@ async function go(idx) {
     toast(`Switching to ${label}…`);
   }
   curIdx = idx;
-  curStream = streams[idx];
+  lastPlayTrigger = trigger;
+  if (trigger === 'manual' || trigger === 'button') failedStreams.clear();
+  Perf.bytes = 0;
+  curStream = streamOverride || streams[idx];
   const gen = ++playGen;
   Perf.goT = Date.now();
   Perf.pStart = null;
   D.btnRefresh.disabled = true;
   setActivBtn(idx);
-  try { localStorage.setItem(CFG.STORAGE_KEY, String(idx)); } catch {}
+  try { localStorage.setItem(CFG.STORAGE_KEY, JSON.stringify({ sig: listSig(), idx })); } catch {}
   ThumbMgr.show();
   try { await playStream(curStream, gen); }
   finally {
@@ -2944,7 +3734,10 @@ const GC = (() => {
   function gh(msg) { clearTimeout(gTimer); D.gHint.textContent = msg; D.gHint.classList.add('show'); gTimer = setTimeout(() => D.gHint.classList.remove('show'), 1800); }
   return {
     init() {
-      D.stage.addEventListener('touchstart', e => { const t = e.touches[0]; ts = { x: t.clientX, y: t.clientY, t: Date.now() }; }, { passive: true });
+      D.stage.addEventListener('touchstart', e => {
+        if (e.touches.length > 1 || e.target.closest?.('.plyr__controls, .plyr__menu, input, button, select, a')) { ts = null; return; }
+        const t = e.touches[0]; ts = { x: t.clientX, y: t.clientY, t: Date.now() };
+      }, { passive: true });
       D.stage.addEventListener('touchend', e => {
         if (!ts) return;
         const t = e.changedTouches[0];
@@ -2968,18 +3761,21 @@ const GC = (() => {
   };
 })();
 
-/* ── Keyboard (target-aware, Escape closes overlays) ── */
+/* ── Keyboard ── */
 document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target;
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  if (t?.closest?.('.plyr') && (['f', 'm', 'k', ' '].includes(e.key.toLowerCase()) || /^Arrow/.test(e.key))) return; // Plyr handles these itself
 
   if (e.key === 'Escape') {
+    if (D.statsOverlay.classList.contains('active')) { e.preventDefault(); closeStats(); return; }
     if (D.scOverlay.classList.contains('active')) { e.preventDefault(); closeHelp(); return; }
     if (D.errPanel.classList.contains('active')) { e.preventDefault(); hideError(); return; }
   }
 
   const k = e.key.toLowerCase();
-  if (k === 's') { e.preventDefault(); GA.send('keyboard_shortcut', { key: 's', action: 'switch_stream' }); switchNext('keyboard'); }
+  if (k === 's') { e.preventDefault(); pulseSwitchButton(); GA.send('keyboard_shortcut', { key: 's', action: 'switch_stream' }); switchNext('keyboard'); }
   if (k === 'r') { e.preventDefault(); GA.send('keyboard_shortcut', { key: 'r', action: 'refresh' }); refresh('keyboard'); }
   if (k === 'f') { e.preventDefault(); GA.send('keyboard_shortcut', { key: 'f', action: 'fullscreen' }); toggleFullscreen('keyboard'); }
   if (k === 'p') { e.preventDefault(); GA.send('keyboard_shortcut', { key: 'p', action: 'pip' }); togglePiP('keyboard'); }
@@ -3004,10 +3800,17 @@ document.addEventListener('keydown', e => {
 });
 
 /* ── Fullscreen ── */
+function stageFullscreen() {
+  const rf = D.stage.requestFullscreen || D.stage.webkitRequestFullscreen;
+  if (!rf) { toast('Fullscreen not supported on this device'); return; }
+  try { Promise.resolve(rf.call(D.stage)).catch(() => toast('Fullscreen not supported on this device')); }
+  catch { toast('Fullscreen not supported on this device'); }
+}
 function toggleFullscreen(trigger = 'button') {
   if (curPlyr) {
-    try { if (curPlyr.fullscreen.active) { curPlyr.fullscreen.exit(); GA.send('fullscreen_exit', { trigger_source: trigger }); } else { curPlyr.fullscreen.enter(); GA.send('fullscreen_enter', { trigger_source: trigger }); } }
-    catch { D.stage.requestFullscreen().catch(() => toast('Fullscreen not supported')); }
+    // Plyr's own enter/exit events send the GA event, so don't send a second one here.
+    try { if (curPlyr.fullscreen.active) curPlyr.fullscreen.exit(); else curPlyr.fullscreen.enter(); }
+    catch { stageFullscreen(); }
     return;
   }
   if (document.fullscreenElement) { document.exitFullscreen().catch(() => toast('Exit fullscreen failed')); GA.send('fullscreen_exit', { trigger_source: trigger }); return; }
@@ -3016,6 +3819,7 @@ function toggleFullscreen(trigger = 'button') {
   if (curStream && curStream.type === 'embed' && D.embedFrame) {
     if (D.embedFrame.requestFullscreen) D.embedFrame.requestFullscreen().catch(() => toast('Fullscreen unavailable'));
     else if (D.embedFrame.webkitEnterFullscreen) D.embedFrame.webkitEnterFullscreen();
+    else toast('Fullscreen unavailable on this device');
     return;
   }
   const videoElem = D.stage.querySelector('video');
@@ -3023,19 +3827,48 @@ function toggleFullscreen(trigger = 'button') {
     if (videoElem.requestFullscreen) { videoElem.requestFullscreen().catch(() => toast('Fullscreen unavailable')); return; }
     else if (videoElem.webkitEnterFullscreen) { videoElem.webkitEnterFullscreen(); return; }
   }
-  D.stage.requestFullscreen().catch(() => toast('Fullscreen not supported on this device'));
+  stageFullscreen();
 }
 
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) { try { screen.orientation?.unlock?.(); } catch {} }
+  else if (matchMedia('(max-width: 768px)').matches) { try { Promise.resolve(screen.orientation?.lock?.('landscape')).catch(() => {}); } catch {} }
+});
 /* ── PiP ── */
 function togglePiP(trigger = 'button') {
-  if (curPlyr) { try { curPlyr.pip = !curPlyr.pip; GA.send('pip_toggle', { trigger_source: trigger, pip_active: curPlyr.pip }); } catch { toast('PiP not available'); } return; }
+  if (curPlyr) { try { curPlyr.pip = !curPlyr.pip; } catch { toast('PiP not available'); } return; }
   if (!curPlayer || !(curPlayer instanceof HTMLVideoElement)) { toast('PiP not available for this player'); GA.send('pip_fail', { reason: 'no_video_element', trigger_source: trigger }); return; }
-  if (document.pictureInPictureElement) { document.exitPictureInPicture(); GA.send('pip_exit', { trigger_source: trigger }); }
+  if (document.pictureInPictureElement) { document.exitPictureInPicture().catch(() => {}); GA.send('pip_exit', { trigger_source: trigger }); }
   else curPlayer.requestPictureInPicture().then(() => GA.send('pip_enter', { trigger_source: trigger })).catch(() => { toast('PiP not available'); GA.send('pip_fail', { reason: 'api_error', trigger_source: trigger }); });
 }
 document.addEventListener('enterpictureinpicture', () => GA.send('pip_enter_native'));
 document.addEventListener('leavepictureinpicture', () => GA.send('pip_exit_native'));
 document.addEventListener('fullscreenchange', () => GA.send(document.fullscreenElement ? 'fullscreen_active' : 'fullscreen_inactive'));
+
+/* ── Focus + Stats ── */
+function trapFocus(container, e) {
+  if (e.key !== 'Tab' || !container.classList.contains('active')) return;
+  const els = [...container.querySelectorAll('button,a,input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent !== null);
+  if (!els.length) return;
+  const first = els[0], last = els[els.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+function statsValue(label, value) { const d = document.createElement('div'); d.className = 'sc-item'; d.innerHTML = `<span class="sc-key">${label}</span><span class="sc-desc">${value}</span>`; return d; }
+let statsTimer = null, statsPressTimer = null;
+function renderStats() {
+  if (!D.statsOverlay.classList.contains('active')) return;
+  const v = curPlayer instanceof HTMLVideoElement ? curPlayer : D.stage.querySelector('video');
+  let buffer = 'n/a', res = 'n/a', frames = 'n/a', dropped = 'n/a';
+  try { if (v?.buffered?.length) buffer = `${Math.max(0, v.buffered.end(v.buffered.length - 1) - v.currentTime).toFixed(1)}s`; res = v ? `${v.videoWidth || 0}×${v.videoHeight || 0}` : 'n/a'; const q = v?.getVideoPlaybackQuality?.(); frames = q?.totalVideoFrames ?? 'n/a'; dropped = q?.droppedVideoFrames ?? 'n/a'; } catch {}
+  const latency = D.latencyBadge?.textContent || 'n/a'; const conn = navigator.connection?.effectiveType || 'unknown';
+  D.statsGrid.replaceChildren(...[['Adapter',curAdapter||'none'],['Type',curStream?.type||'none'],['Resolution',res],['Frames',frames],['Dropped',dropped],['Buffer',buffer],['Latency',latency],['Data used',`${(Perf.bytes/1048576).toFixed(1)} MB`],['Network',conn]].map(([a,b])=>statsValue(a,b)));
+}
+function openStats() { if (D.statsOverlay.classList.contains('active')) return; D.statsOverlay.classList.add('active'); renderStats(); clearInterval(statsTimer); statsTimer=setInterval(renderStats,1000); GA.send('stats_opened'); setTimeout(() => D.statsClose.focus(), 30); }
+function closeStats() { if (!D.statsOverlay.classList.contains('active')) return; D.statsOverlay.classList.remove('active'); clearInterval(statsTimer); statsTimer=null; GA.send('stats_closed'); }
+D.statsClose.addEventListener('click', closeStats); D.statsOverlay.addEventListener('click', e => { if (e.target === D.statsOverlay) closeStats(); });
+D.liveBadge.addEventListener('dblclick', openStats); D.liveBadge.addEventListener('pointerdown', () => { clearTimeout(statsPressTimer); statsPressTimer=setTimeout(openStats,800); }); D.liveBadge.addEventListener('pointerup', () => clearTimeout(statsPressTimer)); D.liveBadge.addEventListener('pointercancel', () => clearTimeout(statsPressTimer));
+document.addEventListener('keydown', e => { trapFocus(D.scOverlay,e); trapFocus(D.statsOverlay,e); if (e.key === 'Escape' && D.statsOverlay.classList.contains('active')) { e.stopPropagation(); closeStats(); } }, true);
 
 /* ── Help ── */
 function showHelp() { D.scOverlay.classList.add('active'); GA.send('help_opened'); setTimeout(() => { try { D.scCloseBtn.focus(); } catch {} }, 60); }
@@ -3065,8 +3898,8 @@ function handleErrorFallback() {
 /* ── Init ── */
 (async () => {
   ThumbMgr.init();
-  GA.send('session_start', {
-    mora_sources: moraP.length, embed_sources: embedP.length, one_sources: oneP.length, xoilac_sources: xoilacP.length, live_url_sources: liveUrlP.length,
+  GA.send('player_session_start', {
+    mora_sources: moraP.length, embed_sources: embedP.length, one_sources: oneP.length, xoilac_sources: xoilacP.length, xoilac_count: xoilacP.length, live_url_sources: liveUrlP.length,
     has_drm_key: !!drmKP,
     referrer: document.referrer.slice(0, 80) || 'direct',
     user_agent: navigator.userAgent.slice(0, 120),
@@ -3074,12 +3907,39 @@ function handleErrorFallback() {
     device_pixel_ratio: window.devicePixelRatio || 1,
   });
 
+  D.eeRetryBtn.addEventListener('click', () => EmbedMgr.retry());
+  D.eeNext.addEventListener('click', () => EmbedMgr.nextSource());
+  D.eeFallback.addEventListener('click', () => SP.goFallback());
+  D.btnRetry.addEventListener('click', () => handleErrorRetry());
+  D.btnFallback.addEventListener('click', () => handleErrorFallback());
+  D.btnReload.addEventListener('click', () => location.reload());
+  D.btnRefresh.addEventListener('click', () => refresh('click'));
+  D.btnFullscreen.addEventListener('click', () => toggleFullscreen('click'));
+  D.btnPip.addEventListener('click', () => togglePiP('click'));
+  D.btnHelp.addEventListener('click', () => showHelp());
+  D.scCloseBtn.addEventListener('click', () => closeHelp());
+  D.pbFsBtn.addEventListener('click', () => toggleFullscreen('click'));
+
   if (!moraP.length && !embedP.length && !oneP.length && !xoilacP.length && !liveUrlP.length) {
     D.initPh.innerHTML = '<p style="color:rgba(255,255,255,.3);font-size:14px;">No stream source provided.</p>';
+    buildBtns([]);
     setLoading(false);
     GA.send('init_no_sources');
     return;
   }
+
+  const provisional = [
+    ...moraP.map((url, i) => ({ type: /\.mpd(?:[?#&]|$)/i.test(url) ? 'dash' : 'hls', url, originalUrl: url, customLabel: `Stream ${i + 1}` })),
+    ...liveUrlP.map((url, i) => ({ type: /\.mpd(?:[?#&]|$)/i.test(url) ? 'dash' : 'hls', url, originalUrl: url, customLabel: `Live ${i + 1}` })),
+    ...embedP.map((url, i) => ({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Stream ${i + 1}` })),
+    ...oneP.map((url, i) => ({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `OneBall ${i + 1}`, fromOneball: true })),
+    ...xoilacP.map((url, i) => ({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Xoilac ${i + 1}`, fromXoilac: true })),
+  ];
+  buildBtns(provisional);
+  if (!isIOS() && provisional.some(s => s.type === 'hls')) {
+    ADAPTERS.find(a => a.name === 'hlsjs')?.load().catch(() => {});
+  }
+  ensurePlyr().catch(() => {});
 
   GC.init();
   streams = await loadStreams();
@@ -3091,32 +3951,44 @@ function handleErrorFallback() {
   }
 
   buildBtns(streams);
+  setActivBtn(curIdx);
   checkSignedExpiry();
-  streams.forEach((stream, i) => { if (expiredMora.has(moraP.indexOf(stream.originalUrl))) setHealthDot(i, 'amber'); });
+  const expiredUrls = new Set([...expiredMora].map(i => moraP[i]).filter(Boolean));
+  streams.forEach((stream, i) => { if (expiredUrls.has(stream.originalUrl)) setHealthDot(i, 'amber'); });
   if (expiredMora.size) toast('⚠ Signed URL may be expired', 4200);
   ScoreBoard.init();
 
   let savedIdx = 0;
-  if (oneP.length) {
-    const lastEmbedIdx = streams.map((stream, index) => stream?.type === 'embed' ? index : -1).filter(index => index >= 0).pop();
-    if (lastEmbedIdx !== undefined) { savedIdx = lastEmbedIdx; GA.send('oneball_last_embed_selected', { selected_index: savedIdx + 1 }); }
-  } else {
-    try { const s = parseInt(localStorage.getItem(CFG.STORAGE_KEY), 10); if (!isNaN(s) && s >= 0 && s < streams.length) { savedIdx = s; GA.send('saved_stream_restored', { saved_index: s + 1 }); } } catch {}
+  const firstDirectHlsIdx = streams.findIndex(stream => stream?.type === 'hls' && !stream.isFallback);
+  const firstDirectDashIdx = streams.findIndex(stream => stream?.type === 'dash' && !stream.isFallback);
+
+  // OneBall pages must begin with a direct HLS candidate.  The stream
+  // ordering already places all direct HLS candidates before DASH and iframe
+  // entries, so the normal retry/auto-next path will exhaust direct media
+  // before it ever falls back to an iframe.
+  if ((oneP.length || xoilacP.length) && firstDirectHlsIdx >= 0) {
+    savedIdx = firstDirectHlsIdx;
+    GA.send('initial_direct_hls_selected', {
+      selected_index: savedIdx + 1,
+      selected_label: streams[savedIdx].customLabel || streams[savedIdx].label || '',
+      direct_hls_count: streams.filter(stream => stream?.type === 'hls' && !stream.isFallback).length,
+    });
+  } else if ((oneP.length || xoilacP.length) && firstDirectDashIdx >= 0) {
+    savedIdx = firstDirectDashIdx;
+    GA.send('initial_direct_dash_selected', { selected_index: savedIdx + 1 });
+  } else if (!oneP.length && !xoilacP.length) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CFG.STORAGE_KEY));
+      if (saved && saved.sig === listSig() && Number.isInteger(saved.idx) && saved.idx >= 0 && saved.idx < streams.length) {
+        savedIdx = saved.idx;
+        GA.send('saved_stream_restored', { saved_index: savedIdx + 1 });
+      }
+    } catch {}
   }
 
+  lateJobs.forEach(j => j.then(appendLateStreams).catch(() => {}));
   await go(savedIdx);
 
-  D.eeRetryBtn.addEventListener('click', () => EmbedMgr.retry());
-  D.eeNext.addEventListener('click', () => EmbedMgr.nextSource());
-  D.eeFallback.addEventListener('click', () => SP.goFallback());
-  D.btnRetry.addEventListener('click', () => handleErrorRetry());
-  D.btnFallback.addEventListener('click', () => handleErrorFallback());
-  D.btnRefresh.addEventListener('click', () => refresh('click'));
-  D.btnFullscreen.addEventListener('click', () => toggleFullscreen('click'));
-  D.btnPip.addEventListener('click', () => togglePiP('click'));
-  D.btnHelp.addEventListener('click', () => showHelp());
-  D.scCloseBtn.addEventListener('click', () => closeHelp());
-  D.pbFsBtn.addEventListener('click', () => toggleFullscreen('click'));
 })();
 
 /* ── Public API ── */
@@ -3126,22 +3998,23 @@ return {
   go, showHelp, closeHelp,
   toggleFullscreen: t => toggleFullscreen(t || 'button'),
   togglePiP: t => togglePiP(t || 'button'),
+  togglePlayback,
   handleErrorRetry, handleErrorFallback,
   goFallback() { cancelAutoNextSwitch('user_fallback'); GA.send('use_backup_clicked', { trigger: 'embed_error_panel' }); EmbedMgr.unmount(); showFallback('user_requested'); },
   retryEmbed: () => EmbedMgr.retry(),
   nextEmbedSource: () => EmbedMgr.nextSource(),
-  // Debug/QA helper — lets you inspect extraction against any page in DevTools.
+  trapFocus,
   extractMfst,
 };
 })();
 </script>
 
-<!-- ── Join buttons + donation popup ── -->
+<!-- ── Join buttons + donation popup (join UI hidden; control-row Support button remains available) ── -->
 <script>
 (() => {
   'use strict';
-  const POPUP_DELAY_MS = 25000;          // first show, after 25s on the page
-  const POPUP_COOLDOWN_MS = 24 * 3600e3; // don't re-show for 24h after it's been seen
+  const POPUP_DELAY_MS = 25000;
+  const POPUP_COOLDOWN_MS = 24 * 3600e3;
   const KEY = 'sp_donate_seen';
 
   const pop = document.getElementById('donate-pop');
@@ -3158,9 +4031,8 @@ return {
   document.getElementById('btn-tg').addEventListener('click', () => track('join_telegram_click'));
   document.getElementById('btn-wa').addEventListener('click', () => track('join_whatsapp_click'));
   pop.querySelectorAll('a.dp-btn').forEach(a => a.addEventListener('click', () => track('donate_link_click', { target: a.classList.contains('bmc') ? 'buymeacoffee' : 'patreon' })));
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && pop.classList.contains('active')) { e.stopPropagation(); close(); } }, true);
+  document.addEventListener('keydown', e => { try { SP.trapFocus(pop, e); } catch {} if (e.key === 'Escape' && pop.classList.contains('active')) { e.stopPropagation(); close(); } }, true);
 
-  // Floating join buttons: show labels for 7s, then collapse to icons. ✕ hides them for this session.
   const fj = document.getElementById('float-join');
   try { if (sessionStorage.getItem('sp_fj_hidden') === '1') fj.classList.add('hidden'); } catch {}
   setTimeout(() => fj.classList.remove('expanded'), 7000);
@@ -3175,7 +4047,6 @@ return {
   try { last = parseInt(localStorage.getItem(KEY), 10) || 0; } catch {}
   if (Date.now() - last > POPUP_COOLDOWN_MS) {
     setTimeout(() => {
-      // Don't interrupt while an error panel is up
       if (document.getElementById('err-panel').classList.contains('active')) return;
       open('auto');
     }, POPUP_DELAY_MS);
