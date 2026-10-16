@@ -729,7 +729,7 @@ if (!_isOnline) setOfflineBanner(true);
 // their own query parameters. Only the known player keys are separators.
 // [signed-url] 'liveUrl' added so ?liveUrl=<encoded> (DPlayer-style) is
 // recognised as a raw stream source, same as the reference build.
-const RAW_PARAM_KEYS = ['liveUrl','mora','embed','one','data','drmkey','referer','thumb','team1','team2','league','score','clock'];
+const RAW_PARAM_KEYS = ['liveUrl','mora','embed','one','xoilac','data','drmkey','referer','thumb','team1','team2','league','score','clock'];
 function parseRawParams() {
   const raw = String(location.search || '').replace(/^\?/, '');
   const out = Object.create(null);
@@ -769,13 +769,14 @@ const moraP = getP('mora').filter(safe);
 const liveUrlP = getP('liveUrl').filter(safe);
 const embedP = getP('embed').filter(safe);
 const oneP = getP('one').filter(safe);
+const xoilacP = getP('xoilac').filter(safe);
 const drmKP = getRawP('drmkey').trim();
 const refP = getRawP('referer').trim();
 const scoreTeam1 = getRawP('team1').trim();
 const scoreTeam2 = getRawP('team2').trim();
 const scoreLeague = getRawP('league').trim();
 const scoreManual = { score: getRawP('score'), clock: getRawP('clock'), league: getRawP('league') };
-console.info('[player] parsed stream URLs', { mora: moraP, embed: embedP, one: oneP, liveUrl: liveUrlP });
+  console.info('[player] parsed stream URLs', { mora: moraP, embed: embedP, one: oneP, xoilac: xoilacP, liveUrl: liveUrlP });
 
 /* ── Toast / Banner ── */
 function toast(msg, dur = 2400) { clearTimeout(toastTimer); D.toast.textContent = msg; D.toast.classList.add('show'); toastTimer = setTimeout(() => D.toast.classList.remove('show'), dur); }
@@ -2826,7 +2827,7 @@ function showFallback(reason = 'all_failed') {
 async function loadStreams() {
   const result = [];
   setLoading(true, 'Finding best stream…', 10);
-  GA.send('streams_load_start', { mora_count: moraP.length, embed_count: embedP.length, one_count: oneP.length, live_url_count: liveUrlP.length });
+  GA.send('streams_load_start', { mora_count: moraP.length, embed_count: embedP.length, one_count: oneP.length, xoilac_count: xoilacP.length, live_url_count: liveUrlP.length });
   const t0 = Date.now();
 
   console.info('[player] loading parsed mora streams', moraP);
@@ -2842,6 +2843,10 @@ async function loadStreams() {
 
   embedP.forEach((url, index) => {
     result.push({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Stream ${index + 1}` });
+  });
+
+  xoilacP.forEach((url, index) => {
+    result.push({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Xoilac ${index + 1}` });
   });
 
   if (oneP.length) {
@@ -3061,7 +3066,7 @@ function handleErrorFallback() {
 (async () => {
   ThumbMgr.init();
   GA.send('session_start', {
-    mora_sources: moraP.length, embed_sources: embedP.length, one_sources: oneP.length, live_url_sources: liveUrlP.length,
+    mora_sources: moraP.length, embed_sources: embedP.length, one_sources: oneP.length, xoilac_sources: xoilacP.length, live_url_sources: liveUrlP.length,
     has_drm_key: !!drmKP,
     referrer: document.referrer.slice(0, 80) || 'direct',
     user_agent: navigator.userAgent.slice(0, 120),
@@ -3069,7 +3074,7 @@ function handleErrorFallback() {
     device_pixel_ratio: window.devicePixelRatio || 1,
   });
 
-  if (!moraP.length && !embedP.length && !oneP.length && !liveUrlP.length) {
+  if (!moraP.length && !embedP.length && !oneP.length && !xoilacP.length && !liveUrlP.length) {
     D.initPh.innerHTML = '<p style="color:rgba(255,255,255,.3);font-size:14px;">No stream source provided.</p>';
     setLoading(false);
     GA.send('init_no_sources');
