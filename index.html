@@ -698,7 +698,7 @@ const GA = (() => {
   }
   function snapshotDims() {}
   function send(eventName, extra = {}) {
-    if (DEBUG && /^xoilac_/.test(eventName)) console.log('[GA]', eventName, extra);
+    if (DEBUG && /^(xoilac_|adapter_|silent_|hlsjs_|stream_resolve|oneball_|signed_|cors_|proxy_)/.test(eventName)) console.log('[GA]', eventName, extra);
     try { gtag('event', eventName, { ..._dims(), session_sec: _sessionSec(), visible_sec: _visibleSec(), ...extra }); }
     catch (e) { LOG('[GA]', eventName, e); }
   }
@@ -2187,16 +2187,44 @@ function xoilacEmbedUrl(u) {
 }
 // Iframe pages are fetched with the match page as Referer (what a browser sends when the iframe loads),
 // via the own worker first; every attempt's HTTP status is logged so failures are diagnosable.
-async function fetchXoilacIframe(iframeUrl, pageUrl) {
-  if (CFG.OWN_PROXY) {
-    try {
-      const ref = new URL(pageUrl).origin + '/';
-      const r = await fetchWithTimeout(CFG.OWN_PROXY + encodeURIComponent(iframeUrl) + '&ref=' + encodeURIComponent(ref), CFG.PROXY_TO);
-      LOG('[player] xoilac worker status', r.status, iframeUrl);
-      if (r.ok) { const t = await r.text(); if (t) return t; }
-    } catch (e) { LOG('[player] xoilac worker error', e?.message || e, iframeUrl); }
+// Treat channel-1 and channel1 links across different types as the same channel.
+function xoilacChannelKey(u) {
+  const m = String(u).match(/\/link\/channel-?(\d+)/i);
+  return m ? m[1] : String(u);
+}
+
+// Race the configured Worker and corsproxy.io; slow proxy chains previously
+// multiplied the timeout for every listed channel.
+async function fetchXoilacIframe(iframeUrl, pageUrl, ms = 7000) {
+  let ref = '';
+  try { ref = new URL(pageUrl).origin + '/'; } catch {}
+  const routes = [];
+  if (CFG.OWN_PROXY) routes.push({ name: 'worker', u: CFG.OWN_PROXY + encodeURIComponent(iframeUrl) + (ref ? '&ref=' + encodeURIComponent(ref) : '') });
+  routes.push({ name: 'corsproxy', u: proxyTarget('https://corsproxy.io/?url=', iframeUrl) });
+  try {
+    return await Promise.any(routes.map(async r => {
+      const res = await fetchWithTimeout(r.u, ms, { cache: 'no-store', credentials: 'omit' });
+      LOG('[player] xoilac', r.name, 'status', res.status, iframeUrl);
+      if (!res.ok) throw new Error(`${r.name} HTTP ${res.status}`);
+      const text = await res.text();
+      if (!text || text.length < 20) throw new Error(`${r.name} empty body`);
+      return text;
+    }));
+  } catch (e) {
+    throw new Error(((e && e.errors) || [e]).map(x => x?.message || String(x)).join(' | ').slice(0, 160));
   }
-  return fetchProxied(iframeUrl);
+}
+
+async function xoilacPool(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  }));
+  return out;
 }
 async function resolveXoilac(pageUrl) {
   if (!safe(pageUrl)) return [];
@@ -2249,27 +2277,39 @@ async function resolveXoilac(pageUrl) {
       GA.send('xoilac_no_iframes', { page_url: pageUrl.slice(0, 80), html_len: html.length });
       return safe(pageUrl) ? [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac page', fromXoilac: true }] : [];
     }
-    GA.send('xoilac_iframes_found', { page_url: pageUrl.slice(0, 80), count: iframes.length });
+    // A match page may list the same channel under several stream types.
+    const byKey = new Map();
+    iframes.forEach(u => { const key = xoilacChannelKey(u); if (!byKey.has(key)) byKey.set(key, u); });
+    const picked = [...byKey.values()].slice(0, 8);
+    GA.send('xoilac_iframes_found', { page_url: pageUrl.slice(0, 80), count: iframes.length, unique: picked.length });
+    LOG('[player] xoilac iframes', picked);
 
-    // Fetch every iframe page in parallel (through the proxy chain); keep results in page order.
-    const fetched = await Promise.all(iframes.map(async iframeUrl => {
-      try { return { iframeUrl, m3u8: extractXoilacM3u8(await fetchXoilacIframe(xoilacEmbedUrl(iframeUrl), pageUrl), iframeUrl) }; }
-      catch (e) { return { iframeUrl, error: (e?.message || 'unknown').slice(0, 120) }; }
-    }));
+    let checked = 0;
+    const fetched = await xoilacPool(picked, 4, async iframeUrl => {
+      try {
+        const body = await fetchXoilacIframe(xoilacEmbedUrl(iframeUrl), pageUrl);
+        const m3u8 = extractXoilacM3u8(body, iframeUrl);
+        if (!m3u8) LOG('[player] xoilac iframe body (no m3u8)', iframeUrl, body.slice(0, 200));
+        return { iframeUrl, m3u8, htmlLen: body.length };
+      } catch (e) {
+        return { iframeUrl, error: (e?.message || 'unknown').slice(0, 120) };
+      } finally {
+        checked++;
+        if (!curStream) setLoading(true, `Xoilac: checked ${checked}/${picked.length}…`, 15 + Math.round(checked / picked.length * 25));
+      }
+    });
 
     const seen = new Set();
     const results = [];
     fetched.forEach(({ iframeUrl, m3u8, error }) => {
       if (error) {
         LOG('[player] xoilac iframe fetch failed', iframeUrl, error);
-        GA.send('xoilac_channel_fail', { iframe_url: iframeUrl.slice(0, 100), error });
-        results.push({ type: 'embed', url: iframeUrl, embedUrls: [iframeUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true });
+        GA.send('xoilac_channel_fail', { stage: 'iframe_fetch', iframe_url: iframeUrl.slice(0, 100), error });
         return;
       }
       if (!m3u8) {
         LOG('[player] xoilac iframe has no .m3u8', iframeUrl);
-        GA.send('xoilac_channel_no_m3u8', { iframe_url: iframeUrl.slice(0, 100) });
-        results.push({ type: 'embed', url: iframeUrl, embedUrls: [iframeUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true });
+        GA.send('xoilac_channel_no_m3u8', { stage: 'm3u8_extraction', iframe_url: iframeUrl.slice(0, 100), html_len: htmlLen });
         return;
       }
       if (seen.has(m3u8)) {
