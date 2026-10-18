@@ -254,22 +254,33 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 *:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 
 /* ══════════════════════════════════════════════════════════════════
-   PLAYER LAYOUT: the page is the player (hosted at sport803.github.io/player/)
+   PLAYER-ONLY MODE (active only when <html class="po">, which the
+   script at the bottom of <body> sets on /p/player.html)
    ══════════════════════════════════════════════════════════════════ */
-html,body{
+html.po,html.po body{
   margin:0!important;padding:0!important;
   width:100%!important;height:100%!important;
   overflow:hidden!important;background:#000!important;
 }
-#toast{bottom:calc(64px + env(safe-area-inset-bottom,0px))!important}
+/* hide the whole Blogger theme / page except the player */
+html.po body>*:not(#app){display:none!important}
+/* Hide secondary overlays in player-only mode, but retain the source/control
+   row as an interactive overlay and keep the donation dialog available. */
+/* Add ?ui=1 for the full page theme and floating join widgets. */
+html.po #float-join,
+html.po #live-badge,
+html.po #score-overlay,
+html.po #latency-badge,
+html.po #g-hint{display:none!important}
+html.po #toast{bottom:calc(64px + env(safe-area-inset-bottom,0px))!important}
 /* player fills the whole screen */
-#app{
+html.po #app{
   position:fixed!important;inset:0!important;
   width:100vw!important;height:100vh!important;height:100dvh!important;
   margin:0!important;transform:none!important;
   z-index:var(--z-max)!important;
 }
-#stage,#embed-host,#embed-frame{
+html.po #stage,html.po #embed-host,html.po #embed-frame{
   position:absolute!important;inset:0!important;
   width:100%!important;height:100%!important;
 }
@@ -281,18 +292,18 @@ html,body{
 #float-join{top:calc(12px + env(safe-area-inset-top,0px));z-index:23}
 #live-badge{top:calc(13px + env(safe-area-inset-top,0px));z-index:22}
 #score-overlay{top:calc(13px + env(safe-area-inset-top,0px));z-index:21}
-/* Keep source switches and controls overlaid above the stream. */
-body #app #btn-row{position:absolute!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;z-index:var(--z-panel)!important;display:flex!important;background:rgba(20,20,20,.88)!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+/* In player-only mode, keep source switches and controls overlaid above the stream. */
+html.po body #app #btn-row{position:absolute!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;z-index:var(--z-panel)!important;display:flex!important;background:rgba(20,20,20,.88)!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 /* Embedded players draw their own controls inside the iframe. Reserve the
    external control-row height so it cannot cover those controls. */
-body #app #stage{bottom:calc(50px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 50px - env(safe-area-inset-bottom,0px))!important}
-body #app.embed-mode #embed-host{bottom:calc(50px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 50px - env(safe-area-inset-bottom,0px))!important}
+html.po body #app #stage{bottom:calc(50px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 50px - env(safe-area-inset-bottom,0px))!important}
+html.po body #app.embed-mode #embed-host{bottom:calc(50px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 50px - env(safe-area-inset-bottom,0px))!important}
 @media(max-width:700px){
   #score-overlay{left:12px;transform:none;top:calc(56px + env(safe-area-inset-top,0px));max-width:calc(100% - 140px)}
 }
 #loading,#tap-play,#live-badge,#score-overlay,#toast,#g-hint,#latency-badge,#sw-banner,.fj-btn{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 #loading,#tap-play{background:rgba(0,0,0,.72)}
-body #app #btn-row{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(20,20,20,.94)!important}
+html.po body #app #btn-row{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(20,20,20,.94)!important}
 #thumb-bg:not(.on){visibility:hidden}
 #ambient-glow{position:absolute;inset:-12%;z-index:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(229,24,26,.28),transparent 68%);filter:blur(42px);transition:background .8s ease,opacity .8s ease}
 #ambient-glow.on{opacity:1}
@@ -317,6 +328,30 @@ body #app #btn-row{backdrop-filter:none!important;-webkit-backdrop-filter:none!i
 @media(max-width:480px){#score-overlay{top:auto;bottom:calc(58px + env(safe-area-inset-bottom,0px));left:8px;right:8px;max-width:none;width:auto}}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}.s-btn:hover{transform:none}#ambient-glow{transition:none}}
 html.bg-quiet *,html.bg-quiet *::before,html.bg-quiet *::after{animation-play-state:paused!important;transition:none!important}
+/* ── Professional broadcast-control skin ── */
+:root{--bg:#080b10;--surface:#111720;--surface2:#18212d;--border:rgba(196,210,230,.10);--border2:rgba(196,210,230,.17);--text:#f4f7fb;--dim:rgba(226,234,245,.66);--faint:rgba(226,234,245,.38);--red:#ef3340;--red-dim:rgba(239,51,64,.14);--red-hover:#ff4652}
+#btn-row{height:calc(60px + env(safe-area-inset-bottom,0px));padding:0 14px env(safe-area-inset-bottom,0px);gap:12px;background:linear-gradient(180deg,rgba(19,26,36,.98),rgba(13,18,26,.99));border-top:1px solid rgba(196,210,230,.14);box-shadow:0 -10px 28px rgba(0,0,0,.24)}
+#stream-btns{gap:8px;min-width:max-content}.row-divider{height:28px;background:rgba(196,210,230,.18);margin:0 2px}
+.s-btn{position:relative;gap:8px;height:40px;padding:0 12px;border:1px solid rgba(196,210,230,.15);border-radius:10px;background:linear-gradient(180deg,rgba(34,43,56,.88),rgba(24,32,43,.96));color:rgba(233,239,248,.78);font-size:12px;font-weight:650;letter-spacing:.005em;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 2px 8px rgba(0,0,0,.14);transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease}
+.s-btn:hover{background:linear-gradient(180deg,#293547,#202b39);color:#fff;border-color:rgba(196,210,230,.29);box-shadow:0 5px 14px rgba(0,0,0,.24);transform:translateY(-1px)}.s-btn:active{transform:scale(.98)}
+.s-btn.active{color:#fff;background:linear-gradient(180deg,rgba(239,51,64,.20),rgba(239,51,64,.12));border-color:rgba(239,82,92,.55);box-shadow:inset 0 0 0 1px rgba(239,51,64,.08),0 3px 12px rgba(239,51,64,.10)}
+.s-btn.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;border-radius:2px;background:var(--red);box-shadow:0 0 10px rgba(239,51,64,.55)}
+.s-btn .health-dot{width:14px;height:11px;opacity:.92}.s-btn .s-thumb{width:23px;height:23px;border-radius:6px;border:1px solid rgba(255,255,255,.12)}.s-btn .s-icon{font-size:14px}.s-btn .s-name{max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.s-format{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;min-width:40px;height:20px;padding:0 6px;border-radius:6px;background:rgba(81,186,255,.11);border:1px solid rgba(81,186,255,.19);color:#9bd7ff;font-size:9px;font-weight:800;letter-spacing:.075em;line-height:1}
+.s-btn[data-protocol="mpd"] .s-format{background:rgba(249,185,72,.11);border-color:rgba(249,185,72,.22);color:#ffd17d}.s-btn[data-protocol="embed"] .s-format{background:rgba(190,202,220,.09);border-color:rgba(190,202,220,.14);color:#c1ccda}.s-btn.active .s-format{filter:brightness(1.16)}
+#row-controls{gap:7px}.r-btn{height:38px;min-width:38px;padding:0 11px;gap:7px;border-radius:10px;border:1px solid rgba(196,210,230,.13);background:rgba(255,255,255,.045);color:rgba(226,234,245,.72);font-size:11px;font-weight:650;box-shadow:inset 0 1px 0 rgba(255,255,255,.025);transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease}
+.r-btn:hover{background:rgba(255,255,255,.095);border-color:rgba(196,210,230,.26);color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.18)}.r-btn:active{transform:scale(.97)}.r-btn svg{width:15px;height:15px}.r-btn.active-toggle{background:rgba(65,164,255,.13);border-color:rgba(65,164,255,.34);color:#a9d9ff}
+.r-btn.tg{color:#79caff;border-color:rgba(61,180,242,.24)}.r-btn.wa{color:#7ce5a2;border-color:rgba(37,211,102,.23)}.r-btn.donate{color:#ff9aa5;border-color:rgba(255,107,129,.23)}.r-btn.tg:hover,.r-btn.wa:hover,.r-btn.donate:hover{color:#fff}
+#qual-sel{height:38px;min-width:76px;padding:0 27px 0 11px;border-radius:10px;border:1px solid rgba(196,210,230,.17);background-color:#19222e;color:#e7edf5;font-size:11px;font-weight:700;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}#qual-sel:hover,#qual-sel:focus{border-color:rgba(239,51,64,.42);background-color:#202b39}
+#btn-fullscreen{color:#fff;background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.19)}#btn-fullscreen:hover{background:rgba(255,255,255,.15)}#btn-row :is(button,a,select):focus-visible{outline:2px solid #ff6570;outline-offset:2px}
+html.po body #app #btn-row{background:rgba(13,18,26,.96)!important;border-top-color:rgba(196,210,230,.15)!important}
+.plyr--video{--plyr-color-main:#ef3340;--plyr-control-radius:8px}.plyr__controls{padding:34px 18px 16px!important;gap:6px!important;background:linear-gradient(to top,rgba(0,0,0,.88),rgba(0,0,0,.30) 62%,transparent)!important}.plyr__controls .plyr__controls__item{border-radius:8px!important}.plyr__control--overlaid{box-shadow:0 8px 34px rgba(239,51,64,.32)!important}.plyr__menu__container{backdrop-filter:blur(16px)!important}
+@media(max-width:700px){#btn-row{height:calc(56px + env(safe-area-inset-bottom,0px));padding-left:10px;padding-right:10px;gap:9px}.s-btn{height:38px;padding:0 10px;gap:7px}#row-controls{gap:6px}.r-btn,#qual-sel{height:36px}html.po body #app #stage{bottom:calc(56px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 56px - env(safe-area-inset-bottom,0px))!important}html.po body #app.embed-mode #embed-host{bottom:calc(56px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 56px - env(safe-area-inset-bottom,0px))!important}}
+@media(max-width:480px){#btn-row{height:calc(52px + env(safe-area-inset-bottom,0px));padding-left:8px;padding-right:8px;gap:7px}#stream-btns{gap:6px}.s-btn{height:36px;padding:0 9px;font-size:11px;gap:6px}.s-btn .s-name{max-width:130px}.s-format{min-width:30px;height:18px;font-size:8px}.r-btn{height:36px;min-width:36px;padding:0 9px}.r-btn .r-label{display:none}#qual-sel{height:36px;min-width:68px;padding-left:9px}html.po body #app #stage{bottom:calc(52px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 52px - env(safe-area-inset-bottom,0px))!important}html.po body #app.embed-mode #embed-host{bottom:calc(52px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 52px - env(safe-area-inset-bottom,0px))!important}}
+@media(max-width:360px){.s-btn .s-icon{display:none}.s-btn .s-name{max-width:105px}.s-format{min-width:28px;padding:0 4px}#row-controls{gap:5px}.r-btn{min-width:34px;padding:0 8px}}
+@media(prefers-reduced-motion:reduce){.s-btn,.r-btn{transition:none!important}}
+html.po body #app #stage{bottom:calc(60px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 60px - env(safe-area-inset-bottom,0px))!important}html.po body #app.embed-mode #embed-host{bottom:calc(60px + env(safe-area-inset-bottom,0px))!important;height:calc(100% - 60px - env(safe-area-inset-bottom,0px))!important}
+
 </style>
 </head>
 <body>
@@ -478,11 +513,29 @@ html.bg-quiet *,html.bg-quiet *::before,html.bg-quiet *::after{animation-play-st
   </div>
 </div>
 
+<!-- ══ PLAYER-ONLY MODE: must run BEFORE the main player script ══ -->
+<script>
+(function(){
+  var app=document.getElementById('app');
+  var forceUi=/[?&]ui=1\b/i.test(location.search);
+  var isPlayerPath=/\/p\/player\.html/i.test(location.pathname);
+  if(!app||!isPlayerPath||forceUi)return;
+  document.documentElement.classList.add('po');
+  if(app.parentNode!==document.body)document.body.appendChild(app);
+  // keep hiding anything the theme injects later (floating buttons, widgets, ads)
+  new MutationObserver(function(){
+    Array.prototype.forEach.call(document.body.children,function(n){
+      if(n!==app&&n.tagName!=='SCRIPT'&&n.tagName!=='STYLE'&&!/(^|\s)(plyr|jw|vjs|video-js|shaka|sp-keep)/i.test(n.className||''))n.style.setProperty('display','none','important');
+    });
+  }).observe(document.body,{childList:true});
+})();
+</script>
+
 <script>
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Live Stream Player — hardened build (v4, signed-url aware)
+   Live Stream Player — hardened build (v4, signed-url aware, player-only)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const DEBUG = /[?&]debug=1\b/i.test(location.search);
@@ -645,6 +698,7 @@ const GA = (() => {
   }
   function snapshotDims() {}
   function send(eventName, extra = {}) {
+    if (DEBUG && /^xoilac_/.test(eventName)) console.log('[GA]', eventName, extra);
     try { gtag('event', eventName, { ..._dims(), session_sec: _sessionSec(), visible_sec: _visibleSec(), ...extra }); }
     catch (e) { LOG('[GA]', eventName, e); }
   }
@@ -824,7 +878,7 @@ window.addEventListener('offline', handleOffline);
 if (!_isOnline) setOfflineBanner(true);
 
 /* ── Params ── */
-const RAW_PARAM_KEYS = ['liveUrl','mora','embed','one','data','drmkey','referer','thumb','team1','team2','league','score','clock','m','autoplay','debug'];
+const RAW_PARAM_KEYS = ['liveUrl','mora','embed','one','xoilac','data','drmkey','referer','thumb','team1','team2','league','score','clock','m','autoplay','debug'];
 function parseRawParams() {
   const raw = String(location.search || '').replace(/^\?/, '');
   if (raw && !/https?:\/\//i.test(raw)) {
@@ -873,6 +927,7 @@ const moraP = getP('mora').filter(safe);
 const liveUrlP = getP('liveUrl').filter(safe);
 const embedP = getP('embed').filter(safe);
 const oneP = getP('one').filter(safe);
+const xoilacP = getP('xoilac').filter(safe);
 const Prefetch = (() => {
   const warmed = new Set();
   function origin(url) { try { return new URL(url).origin; } catch { return ''; } }
@@ -887,14 +942,14 @@ const Prefetch = (() => {
   }
   return { preconnect, manifest };
 })();
-[...moraP, ...liveUrlP, ...oneP].slice(0,3).forEach(Prefetch.preconnect);
+[...moraP, ...liveUrlP, ...oneP, ...xoilacP].slice(0,3).forEach(Prefetch.preconnect);
 const drmKP = getRawP('drmkey').trim();
-const refP = getRawP('referer').trim();
+const refP = getRawP('referer').trim() || (xoilacP.length ? 'https://xlz.domainkqt.cc/' : '');
 const scoreTeam1 = getRawP('team1').trim();
 const scoreTeam2 = getRawP('team2').trim();
 const scoreLeague = getRawP('league').trim();
 const scoreManual = { score: getRawP('score'), clock: getRawP('clock'), league: getRawP('league') };
-LOG('[player] parsed stream URLs', { mora: moraP, embed: embedP, one: oneP, liveUrl: liveUrlP });
+LOG('[player] parsed stream URLs', { mora: moraP, embed: embedP, one: oneP, xoilac: xoilacP, liveUrl: liveUrlP });
 
 /* ── Toast / Banner ── */
 function toast(msg, dur = 2400) { clearTimeout(toastTimer); D.toast.textContent = msg; D.toast.classList.add('show'); toastTimer = setTimeout(() => D.toast.classList.remove('show'), dur); }
@@ -1154,7 +1209,8 @@ function buildBtns(list) {
     const icon = s.type === 'embed' ? '📺' : L.icon;
     const btn = document.createElement('button');
     btn.type = 'button'; btn.className = 's-btn'; btn.dataset.i = i; btn.title = buttonLabel;
-    btn.setAttribute('aria-label', `Stream ${i + 1}: ${buttonLabel}`);
+    btn.dataset.protocol = s.type === 'dash' ? 'mpd' : s.type === 'hls' ? 'm3u8' : 'embed';
+    btn.setAttribute('aria-label', `Stream ${i + 1}: ${buttonLabel} · ${btn.dataset.protocol.toUpperCase()}`);
     btn.setAttribute('aria-pressed', 'false');
     const healthDot = document.createElement('span'); healthDot.className = 'health-dot grey'; btn.appendChild(healthDot);
     if (thumbP) {
@@ -1162,7 +1218,12 @@ function buildBtns(list) {
     } else {
       const iconSpan = document.createElement('span'); iconSpan.className = 's-icon'; iconSpan.textContent = icon; btn.appendChild(iconSpan);
     }
-    const nameSpan = document.createElement('span'); nameSpan.textContent = buttonLabel; btn.appendChild(nameSpan);
+    const nameSpan = document.createElement('span'); nameSpan.className = 's-name'; nameSpan.textContent = buttonLabel; btn.appendChild(nameSpan);
+    const formatSpan = document.createElement('span');
+    formatSpan.className = 's-format';
+    formatSpan.textContent = s.type === 'dash' ? 'MPD' : s.type === 'hls' ? 'M3U8' : 'WEB';
+    formatSpan.setAttribute('aria-hidden', 'true');
+    btn.appendChild(formatSpan);
 
     btn._stream = s;
     let _lastOpen = 0;
@@ -1384,6 +1445,7 @@ async function fetchProxied(url) {
       GA.sendSampled('proxy_success', 'ps_' + i, { proxy_name: CFG.PROXY_NAMES[i], response_ms: Date.now() - t0 }, 0);
       return t;
     } catch (e) {
+      LOG('[player] proxy failed', CFG.PROXY_NAMES[i], e?.message || e);
       CFG.PSCORE[i] = Math.max(0, CFG.PSCORE[i] - 1);
       GA.sendSampled('proxy_fail', 'pf_' + i, { proxy_name: CFG.PROXY_NAMES[i], error_message: e?.message || 'unknown' }, 0);
       last = e;
@@ -1798,6 +1860,9 @@ function decodeNestedValue(value, base64 = false) {
     }
     if (next === out) break;
     out = next.trim();
+    // Once a full URL is reached, stop: decoding again would turn its encoded %26/%3F/%3D into real
+    // separators and split a signed query (txSecret/txTime) off the stream URL.
+    if (/^https?:\/\//i.test(out)) break;
   }
   return out;
 }
@@ -1983,6 +2048,184 @@ async function resolveOneball(pageUrl) {
     return results;
   } catch (e) {
     GA.send('oneball_resolve_fail', { page_url: pageUrl.slice(0, 80), error: (e?.message || 'unknown').slice(0, 120) });
+    return [];
+  }
+}
+
+/* ── Xoilac resolver ── */
+/*
+ * Xoilac match pages (<xoilac-domain>/truc-tiep/<slug>/, e.g. globaldispatchespodcast.com) expose their streams in two layers:
+ *   1. Outer page: channel buttons ("NICK", "HD NICK", "Tom" ...). Depending on the template the iframe
+ *      URL comes from a list_stream array in an inline script ("https:\/\/xlz.domainkqt.cc\/ajax\/chanel\/..."),
+ *      or from onclick go('<iframe-url>') / data-url / data-src / href attributes. The iframe URL lives on xlz.domainkqt.cc / domainkqt.cc or has
+ *      ajax/chanel in its path, e.g. https://xlz.domainkqt.cc/ajax/chanel/type/8/link/channel5/off-tvc
+ *      (the same URL can also sit in data-url / data-src / href attributes or bare inside inline scripts).
+ *   2. Iframe page: a small JW Player wrapper that declares the stream near the top of an inline
+ *      script (var urlStream = "https://.../channel5.m3u8") or inside jwplayer.setup({ file: "..." }).
+ * Every iframe is fetched through fetchProxied, its .m3u8 is extracted, and one hls entry per
+ * channel is returned (labelled "Xoilac N" from the channel<N> segment; duplicate .m3u8 URLs skipped).
+ */
+const XOILAC_HOST_RE = /(?:^|\.)domainkqt\.cc$/i;
+function isXoilacIframeUrl(u) {
+  try {
+    const p = new URL(u);
+    return XOILAC_HOST_RE.test(p.hostname) || /ajax\/chanel/i.test(p.pathname);
+  } catch { return false; }
+}
+function xoilacCleanRaw(raw, base) {
+  let v = normalizeStreamUrl(String(raw || '')).replace(/\\\//g, '/').replace(/\\u0026/gi, '&').replace(/[\\'"<>)\]]+$/g, '').trim();
+  if (!v) return '';
+  try { v = new URL(v, base).href; } catch { return ''; }
+  return v;
+}
+function extractXoilacIframeUrls(html, pageUrl) {
+  const found = [];
+  const add = raw => {
+    const u = xoilacCleanRaw(raw, pageUrl);
+    if (u && safe(u) && isXoilacIframeUrl(u) && !found.includes(u)) found.push(u);
+  };
+  // Document order matters (it defines Xoilac 1..N when no channel number exists), so collect from the
+  // channel buttons first, then attributes, then bare URLs in scripts.
+  let m;
+  const goRe = /\bgo\(\s*(?:&#0?39;|&quot;|['"])((?:https?:)?\/\/[^'"&]+(?:&amp;[^'"&]*)*|\/[^'"]+)(?:&#0?39;|&quot;|['"])/gi;
+  while ((m = goRe.exec(html)) !== null) add(m[1]);
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('[onclick], [data-url], [data-src], [href]').forEach(el => {
+        const oc = el.getAttribute('onclick') || '';
+        const om = oc.match(/go\(\s*['"]([^'"]+)['"]/i);
+        if (om) add(om[1]);
+        ['data-url', 'data-src', 'href'].forEach(a => { const v = el.getAttribute(a); if (v) add(v); });
+      });
+    } catch {}
+  }
+  // Inline scripts carry the URLs JSON-escaped (https:\/\/host\/ajax\/chanel\/...). Un-escape, then take every URL
+  // and let isXoilacIframeUrl decide (domainkqt.cc host or /ajax/chanel/ path), so a changed iframe host still works.
+  const flat = html.replace(/\\\//g, '/').replace(/\\u0026/gi, '&');
+  const urlRe = /https?:\/\/[^\s'"<>\\)]+/gi;
+  while ((m = urlRe.exec(flat)) !== null) add(m[0]);
+  return found;
+}
+function extractXoilacM3u8(html, iframeUrl) {
+  const pick = raw => {
+    const u = xoilacCleanRaw(raw, iframeUrl);
+    return u && safe(u) && /\.m3u8(?:[?#]|$)/i.test(u) ? u : '';
+  };
+  const patterns = [
+    /\burlStream\s*=\s*["']([^"']+)["']/i,
+    /\bfile\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i,
+    /["']((?:https?:)?(?:\\?\/){2}[^"'\s]+?\.m3u8[^"'\s]*)["']/i,
+    /((?:https?:)?\/\/[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*)/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    const u = m && pick(m[1]);
+    if (u) return u;
+  }
+  return '';
+}
+// The match page stores bare iframe URLs (".../link/channel5") in a list_stream array and its own JS
+// appends "/off-tvc" and "?is_off_add=false" before embedding; do the same so we get the ad-free wrapper.
+function xoilacEmbedUrl(u) {
+  try {
+    const p = new URL(u);
+    if (!/\/off-tvc\/?$/i.test(p.pathname)) p.pathname = p.pathname.replace(/\/+$/, '') + '/off-tvc';
+    if (!p.searchParams.has('is_off_add')) p.searchParams.set('is_off_add', 'false');
+    return p.href;
+  } catch { return u; }
+}
+// Iframe pages are fetched with the match page as Referer (what a browser sends when the iframe loads),
+// via the own worker first; every attempt's HTTP status is logged so failures are diagnosable.
+async function fetchXoilacIframe(iframeUrl, pageUrl) {
+  if (CFG.OWN_PROXY) {
+    try {
+      const ref = new URL(pageUrl).origin + '/';
+      const r = await fetchWithTimeout(CFG.OWN_PROXY + encodeURIComponent(iframeUrl) + '&ref=' + encodeURIComponent(ref), CFG.PROXY_TO);
+      LOG('[player] xoilac worker status', r.status, iframeUrl);
+      if (r.ok) { const t = await r.text(); if (t) return t; }
+    } catch (e) { LOG('[player] xoilac worker error', e?.message || e, iframeUrl); }
+  }
+  return fetchProxied(iframeUrl);
+}
+// Xoilac moves between domains (xoilaczzz.pro -> globaldispatchespodcast.com). Match pages keep the same
+// /truc-tiep/<slug>/ path, so a link on an older domain is also tried on the others, in parallel.
+const XOILAC_DOMAINS = ['globaldispatchespodcast.com', 'xoilaczzz.pro'];
+function xoilacPageCandidates(pageUrl) {
+  const out = [pageUrl];
+  try {
+    const u = new URL(pageUrl);
+    if (XOILAC_DOMAINS.includes(u.hostname.replace(/^www\./, '')) && /^\/truc-tiep\//i.test(u.pathname)) {
+      XOILAC_DOMAINS.forEach(d => { const v = new URL(u.href); v.hostname = d; if (!out.includes(v.href)) out.push(v.href); });
+    }
+  } catch {}
+  return out;
+}
+async function resolveXoilac(pageUrl) {
+  if (!safe(pageUrl)) return [];
+  const t0 = Date.now();
+  GA.send('xoilac_resolve_start', { page_url: pageUrl.slice(0, 80) });
+  try {
+    const pageAttempts = xoilacPageCandidates(pageUrl).map(async candidate => {
+      const html = await fetchProxied(candidate);
+      const found = extractXoilacIframeUrls(html, candidate);
+      if (!found.length) throw Object.assign(new Error('no iframes'), { htmlLen: html.length });
+      return { usedUrl: candidate, iframes: found };
+    });
+    let picked;
+    try { picked = await Promise.any(pageAttempts); }
+    catch (agg) {
+      const errs = agg?.errors || [agg];
+      if (errs.some(x => x?.message === 'no iframes')) {
+        LOG('[player] xoilac: no iframe URLs on page', pageUrl);
+        GA.send('xoilac_no_iframes', { page_url: pageUrl.slice(0, 80), html_len: errs.find(x => x?.htmlLen != null)?.htmlLen || 0 });
+        return [];
+      }
+      throw errs[0] || agg;
+    }
+    const iframes = picked.iframes;
+    if (picked.usedUrl !== pageUrl) LOG('[player] xoilac: resolved via mirror', picked.usedUrl);
+    pageUrl = picked.usedUrl;
+    GA.send('xoilac_iframes_found', { page_url: pageUrl.slice(0, 80), count: iframes.length });
+
+    // Fetch every iframe page in parallel (through the proxy chain); keep results in page order.
+    const fetched = await Promise.all(iframes.map(async iframeUrl => {
+      try { return { iframeUrl, m3u8: extractXoilacM3u8(await fetchXoilacIframe(xoilacEmbedUrl(iframeUrl), pageUrl), iframeUrl) }; }
+      catch (e) { return { iframeUrl, error: (e?.message || 'unknown').slice(0, 120) }; }
+    }));
+
+    const seen = new Set();
+    const results = [];
+    fetched.forEach(({ iframeUrl, m3u8, error }) => {
+      if (error) {
+        LOG('[player] xoilac iframe fetch failed', iframeUrl, error);
+        GA.send('xoilac_channel_fail', { iframe_url: iframeUrl.slice(0, 100), error });
+        return;
+      }
+      if (!m3u8) {
+        LOG('[player] xoilac iframe has no .m3u8', iframeUrl);
+        GA.send('xoilac_channel_no_m3u8', { iframe_url: iframeUrl.slice(0, 100) });
+        return;
+      }
+      if (seen.has(m3u8)) {
+        GA.send('xoilac_channel_duplicate', { iframe_url: iframeUrl.slice(0, 100) });
+        return;
+      }
+      seen.add(m3u8);
+      const num = (iframeUrl.match(/channel-?(\d+)/i) || [])[1];
+      const customLabel = num ? `Xoilac ${num}` : 'Xoilac';
+      results.push({
+        type: 'hls', url: m3u8, originalUrl: m3u8, customLabel,
+        fromXoilac: true, extractedFromIframe: true, pageUrl,
+      });
+      LOG('[player] xoilac channel ok', customLabel, m3u8);
+      GA.send('xoilac_channel_ok', { label: customLabel, iframe_url: iframeUrl.slice(0, 100), stream_url: m3u8.slice(0, 100) });
+    });
+
+    GA.send('xoilac_resolve_success', { page_url: pageUrl.slice(0, 80), stream_count: results.length, iframe_count: iframes.length, resolve_ms: Date.now() - t0 });
+    return results;
+  } catch (e) {
+    GA.send('xoilac_resolve_fail', { page_url: pageUrl.slice(0, 80), error: (e?.message || 'unknown').slice(0, 120) });
     return [];
   }
 }
@@ -3147,20 +3390,34 @@ function appendLateStreams(entries) {
   const fresh = entries.filter(e => e && e.url && !have.has(e.url));
   if (!fresh.length) return;
   fresh.forEach(e => { try { Prefetch.preconnect(e.url); } catch {} });
-  const fb = streams.findIndex(s => s.isFallback);
-  const at = fb >= 0 ? fb : streams.length;
-  streams.splice(at, 0, ...fresh);
-  if (curIdx >= at) curIdx += fresh.length;
+  // Same ranking as loadStreams: priority HLS, HLS, DASH, then embeds. Late m3u8 sources are inserted
+  // ahead of iframe wrappers (not appended behind them); failedStreams/curIdx are re-indexed.
+  const rank = s => (s?.isPriority && s.type === 'hls') ? -1 : s?.type === 'hls' ? 0 : s?.type === 'dash' ? 1 : 2;
+  let at = streams.length;
+  fresh.slice().sort((a, b) => rank(a) - rank(b)).forEach(e => {
+    const fbIdx = streams.findIndex(s => s.isFallback);
+    const limit = fbIdx >= 0 ? fbIdx : streams.length;
+    let pos = limit;
+    for (let i = 0; i < limit; i++) { if (rank(streams[i]) > rank(e)) { pos = i; break; } }
+    streams.splice(pos, 0, e);
+    if (curIdx >= pos) curIdx++;
+    const shifted = [...failedStreams].map(i => i >= pos ? i + 1 : i);
+    failedStreams.clear(); shifted.forEach(i => failedStreams.add(i));
+    at = Math.min(at, pos);
+  });
   buildBtns(streams); setActivBtn(curIdx);
   GA.send('streams_late_added', { count: fresh.length });
+  // Direct m3u8 beats an iframe wrapper: if the player is still on an embed early on, hop to the new HLS.
+  const freshHls = streams.findIndex(s => fresh.includes(s) && s.type === 'hls');
   if (streams[curIdx]?.isFallback || appState === 'error') go(at);
+  else if (freshHls >= 0 && streams[curIdx]?.type === 'embed' && Perf.sec() < 12) go(freshHls);
   else toast(`+${fresh.length} more source${fresh.length > 1 ? 's' : ''}`);
 }
 async function loadStreams() {
   lateJobs = [];
   const result = [];
   setLoading(true, 'Finding best stream…', 10);
-  GA.send('streams_load_start', { mora_count: moraP.length, embed_count: embedP.length, one_count: oneP.length, live_url_count: liveUrlP.length });
+  GA.send('streams_load_start', { mora_count: moraP.length, embed_count: embedP.length, one_count: oneP.length, xoilac_count: xoilacP.length, live_url_count: liveUrlP.length });
   const t0 = Date.now();
 
   LOG('[player] loading parsed mora streams', moraP);
@@ -3170,13 +3427,16 @@ async function loadStreams() {
   const onePromise = oneP.length
     ? Promise.allSettled(oneP.map(u => resolveOneball(u)))
     : Promise.resolve([]);
+  const xoilacPromise = xoilacP.length
+    ? Promise.allSettled(xoilacP.map(u => resolveXoilac(u)))
+    : Promise.resolve([]);
   // Don't let one slow source hold up playback: start shortly after the first source resolves
   // (or at START_DEADLINE) and add the slow ones when they arrive (see appendLateStreams).
   const sleepT = ms => new Promise(r => setTimeout(() => r('timeout'), ms));
   const moraSlots = new Array(combinedRaw.length);
   let graceRes; const grace = new Promise(r => { graceRes = r; });
   const moraJobs = combinedRaw.map((url, i) => resolveStream(url).then(
-    v => { moraSlots[i] = { status: 'fulfilled', value: v }; if (!oneP.length && v) setTimeout(() => graceRes('grace'), CFG.START_GRACE); },
+    v => { moraSlots[i] = { status: 'fulfilled', value: v }; if (!oneP.length && !xoilacP.length && v) setTimeout(() => graceRes('grace'), CFG.START_GRACE); },
     e => { moraSlots[i] = { status: 'rejected', reason: e }; }));
   const moraAll = Promise.all(moraJobs);
   await Promise.race([moraAll, grace, sleepT(CFG.START_DEADLINE)]);
@@ -3200,8 +3460,13 @@ async function loadStreams() {
     result.push({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Stream ${index + 1}` });
   });
 
+  // Both timers start together, so Xoilac gets the same deadline as OneBall instead of the leftovers.
+  const raceDeadline = p => Promise.race([p, sleepT(Math.max(1500, CFG.START_DEADLINE - (Date.now() - t0)))]);
+  const oneRace = oneP.length ? raceDeadline(onePromise) : null;
+  const xoilacRace = xoilacP.length ? raceDeadline(xoilacPromise) : null;
+
   if (oneP.length) {
-    let oneResults = await Promise.race([onePromise, sleepT(Math.max(1500, CFG.START_DEADLINE - (Date.now() - t0)))]);
+    let oneResults = await oneRace;
     let oneLate = null;
     if (oneResults === 'timeout') { oneLate = onePromise; oneResults = []; }
     lateJobs.oneLate = oneLate;
@@ -3215,16 +3480,33 @@ async function loadStreams() {
     });
   }
 
+  if (xoilacP.length) {
+    let xoilacResults = await xoilacRace;
+    let xoilacLate = null;
+    if (xoilacResults === 'timeout') { xoilacLate = xoilacPromise; xoilacResults = []; }
+    lateJobs.xoilacLate = xoilacLate;
+    xoilacResults.forEach((r, i) => {
+      if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+        result.push(...r.value);
+        const first = r.value.find(x => x.type === 'hls');
+        if (first) Prefetch.preconnect(first.url);
+      }
+      else { LOG(`xoilac[${i}] failed:`, r.reason?.message); GA.send('xoilac_page_fail', { page_index: i, page_url: (xoilacP[i] || '').slice(0, 80) }); }
+    });
+  }
+
   // Nothing playable yet? Then there is nothing to start with, so wait for the slow sources after all.
-  const _oneLate = lateJobs.oneLate || null; lateJobs = [];
-  if (!mora.length && !result.length && (moraLate || _oneLate)) {
+  const _oneLate = lateJobs.oneLate || null; const _xoilacLate = lateJobs.xoilacLate || null; lateJobs = [];
+  if (!mora.length && !result.length && (moraLate || _oneLate || _xoilacLate)) {
     setLoading(true, 'Still looking for a stream…', 40);
     if (moraLate) mora.push(...(await moraLate));
     if (_oneLate) result.push(...oneEntries(await _oneLate));
+    if (_xoilacLate) result.push(...oneEntries(await _xoilacLate));
     moraLate = null;
   } else {
     if (moraLate) lateJobs.push(moraLate);
     if (_oneLate) lateJobs.push(_oneLate.then(oneEntries));
+    if (_xoilacLate) lateJobs.push(_xoilacLate.then(oneEntries));
   }
 
   // Always present direct media before iframe wrappers.  This is especially
@@ -3486,7 +3768,7 @@ function handleErrorFallback() {
 (async () => {
   ThumbMgr.init();
   GA.send('player_session_start', {
-    mora_sources: moraP.length, embed_sources: embedP.length, one_sources: oneP.length, live_url_sources: liveUrlP.length,
+    mora_sources: moraP.length, embed_sources: embedP.length, one_sources: oneP.length, xoilac_sources: xoilacP.length, xoilac_count: xoilacP.length, live_url_sources: liveUrlP.length,
     has_drm_key: !!drmKP,
     referrer: document.referrer.slice(0, 80) || 'direct',
     user_agent: navigator.userAgent.slice(0, 120),
@@ -3507,7 +3789,7 @@ function handleErrorFallback() {
   D.scCloseBtn.addEventListener('click', () => closeHelp());
   D.pbFsBtn.addEventListener('click', () => toggleFullscreen('click'));
 
-  if (!moraP.length && !embedP.length && !oneP.length && !liveUrlP.length) {
+  if (!moraP.length && !embedP.length && !oneP.length && !xoilacP.length && !liveUrlP.length) {
     D.initPh.innerHTML = '<p style="color:rgba(255,255,255,.3);font-size:14px;">No stream source provided.</p>';
     buildBtns([]);
     setLoading(false);
@@ -3520,6 +3802,7 @@ function handleErrorFallback() {
     ...liveUrlP.map((url, i) => ({ type: /\.mpd(?:[?#&]|$)/i.test(url) ? 'dash' : 'hls', url, originalUrl: url, customLabel: `Live ${i + 1}` })),
     ...embedP.map((url, i) => ({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Stream ${i + 1}` })),
     ...oneP.map((url, i) => ({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `OneBall ${i + 1}`, fromOneball: true })),
+    ...xoilacP.map((url, i) => ({ type: 'embed', url, embedUrls: [url], originalUrl: url, customLabel: `Xoilac ${i + 1}`, fromXoilac: true })),
   ];
   buildBtns(provisional);
   if (!isIOS() && provisional.some(s => s.type === 'hls')) {
@@ -3552,17 +3835,17 @@ function handleErrorFallback() {
   // ordering already places all direct HLS candidates before DASH and iframe
   // entries, so the normal retry/auto-next path will exhaust direct media
   // before it ever falls back to an iframe.
-  if (oneP.length && firstDirectHlsIdx >= 0) {
+  if ((oneP.length || xoilacP.length) && firstDirectHlsIdx >= 0) {
     savedIdx = firstDirectHlsIdx;
     GA.send('initial_direct_hls_selected', {
       selected_index: savedIdx + 1,
       selected_label: streams[savedIdx].customLabel || streams[savedIdx].label || '',
       direct_hls_count: streams.filter(stream => stream?.type === 'hls' && !stream.isFallback).length,
     });
-  } else if (oneP.length && firstDirectDashIdx >= 0) {
+  } else if ((oneP.length || xoilacP.length) && firstDirectDashIdx >= 0) {
     savedIdx = firstDirectDashIdx;
     GA.send('initial_direct_dash_selected', { selected_index: savedIdx + 1 });
-  } else if (!oneP.length) {
+  } else if (!oneP.length && !xoilacP.length) {
     try {
       const saved = JSON.parse(localStorage.getItem(CFG.STORAGE_KEY));
       if (saved && saved.sig === listSig() && Number.isInteger(saved.idx) && saved.idx >= 0 && saved.idx < streams.length) {
