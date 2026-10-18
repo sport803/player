@@ -1905,8 +1905,10 @@ function extractNestedMediaUrls(sourceUrl) {
     }
 
     for (const [key, raw] of u.searchParams.entries()) {
-      if (!/^(?:url|u|liveurl|live_url|src|source|stream|file)$/i.test(key)) continue;
-      const child = decodeNestedValue(raw, /^u$/i.test(key));
+      const knownKey = /^(?:url|u|liveurl|live_url|src|source|stream|file)$/i.test(key);
+      const base64Like = /^[A-Za-z0-9+/_-]{24,}={0,2}$/.test(raw);
+      if (!knownKey && !base64Like) continue;
+      const child = decodeNestedValue(raw, /^u$/i.test(key) || base64Like);
       if (child && safe(child)) add(child);
     }
   }
@@ -1925,8 +1927,8 @@ function decodeDisplayText(value, fallback = '') {
   return text || fallback;
 }
 
-const isHDJ = l => /\bHD[\s_.-]*J\b/i.test(String(l || ''));
-const isIgnoredOneballLabel = l => /^\s*HD[\s_.-]*B(?:\b|\s*\()/i.test(String(l || '')) || (isIOS() && /^\s*HD[\s_.-]*P(?:remium)?(?:\b|\s*\()/i.test(String(l || '')));
+const isPreferredOneballLabel = l => /^\s*(?:HD|SD)[\s_.-]*[VJ](?:\b|\s*\()/i.test(String(l || ''));
+const isIgnoredOneballLabel = l => /^\s*(?:HD|SD)[\s_.-]*B(?:\b|\s*\()/i.test(String(l || '')) || (isIOS() && /^\s*HD[\s_.-]*P(?:remium)?(?:\b|\s*\()/i.test(String(l || '')));
 function oneballEntries(embedUrl, label, pageUrl) {
   const cleanLabel = decodeDisplayText(label, 'Stream');
   const mediaUrls = extractNestedMediaUrls(embedUrl);
@@ -1935,7 +1937,7 @@ function oneballEntries(embedUrl, label, pageUrl) {
     const type = /\.mpd(?:[?#&]|$)/i.test(mediaUrl) ? 'dash' : 'hls';
     out.push({
       type, url: mediaUrl, originalUrl: pageUrl, customLabel: cleanLabel,
-      fromOneball: true, extractedFromIframe: true, isPriority: isHDJ(cleanLabel),
+      fromOneball: true, extractedFromIframe: true, isPriority: isPreferredOneballLabel(cleanLabel),
     });
   });
   if (safe(embedUrl)) {
@@ -1982,7 +1984,7 @@ async function resolveOneballApi(pageUrl) {
     const signals = Array.isArray(data?.signals) ? data.signals : [];
     const results = [];
     const seen = new Set();
-    signals.slice().sort((a, b) => (Number(isHDJ(b?.label)) - Number(isHDJ(a?.label))) || (Number(a?.sort_order) || 0) - (Number(b?.sort_order) || 0)).forEach((signal, index) => {
+    signals.slice().sort((a, b) => (Number(isPreferredOneballLabel(b?.label)) - Number(isPreferredOneballLabel(a?.label))) || (Number(a?.sort_order) || 0) - (Number(b?.sort_order) || 0)).forEach((signal, index) => {
       if (isIgnoredOneballLabel(signal?.label)) {
         LOG('[player] skipping unsupported iOS OneBall source', signal?.label);
         GA.send('oneball_ios_source_skipped', { label: String(signal?.label || '').slice(0, 60) });
@@ -2097,7 +2099,7 @@ const XOILAC_HOST_RE = /(?:^|\.)domainkqt\.cc$/i;
 function isXoilacIframeUrl(u) {
   try {
     const p = new URL(u);
-    return XOILAC_HOST_RE.test(p.hostname) || /ajax\/chanel/i.test(p.pathname);
+    return XOILAC_HOST_RE.test(p.hostname) || /(?:ajax\/chanel|channel|iframe|player|stream|\/play\/|\/embed\/)/i.test(p.pathname);
   } catch { return false; }
 }
 function xoilacCleanRaw(raw, base) {
@@ -2108,27 +2110,32 @@ function xoilacCleanRaw(raw, base) {
 }
 function extractXoilacIframeUrls(html, pageUrl) {
   const found = [];
-  const add = raw => {
+  const add = (raw, force = false) => {
     const u = xoilacCleanRaw(raw, pageUrl);
-    if (u && safe(u) && isXoilacIframeUrl(u) && !found.includes(u)) found.push(u);
+    if (u && safe(u) && (force || isXoilacIframeUrl(u)) && !found.includes(u)) found.push(u);
   };
   // Document order matters (it defines Xoilac 1..N when no channel number exists), so collect from the
   // channel buttons first, then attributes, then bare URLs in scripts.
   let m;
   const goRe = /\bgo\(\s*(?:&#0?39;|&quot;|['"])((?:https?:)?\/\/[^'"&]+(?:&amp;[^'"&]*)*|\/[^'"]+)(?:&#0?39;|&quot;|['"])/gi;
-  while ((m = goRe.exec(html)) !== null) add(m[1]);
+  while ((m = goRe.exec(html)) !== null) add(m[1], true);
   if (typeof DOMParser !== 'undefined') {
     try {
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      doc.querySelectorAll('[onclick], [data-url], [data-src], [href]').forEach(el => {
+      doc.querySelectorAll('[onclick], [data-url], [data-src], iframe[src], [href]').forEach(el => {
         const oc = el.getAttribute('onclick') || '';
         const om = oc.match(/go\(\s*['"]([^'"]+)['"]/i);
-        if (om) add(om[1]);
-        ['data-url', 'data-src', 'href'].forEach(a => { const v = el.getAttribute(a); if (v) add(v); });
+        if (om) add(om[1], true);
+        ['data-url', 'data-src'].forEach(a => { const v = el.getAttribute(a); if (v) add(v, true); });
+        const src = el.tagName === 'IFRAME' ? el.getAttribute('src') : '';
+        if (src) add(src, true);
+        const href = el.getAttribute('href');
+        if (href && /stream|channel|player|iframe|watch|live|tv/i.test(el.className || '')) add(href, true);
+        else if (href) add(href);
       });
     } catch {}
   }
-  const bareRe = /(?:https?:)?\\?\/\\?\/[a-z0-9.-]*domainkqt\.cc[^\s'"<>\\]*(?:\\\/[^\s'"<>\\]*)*|https?:\/\/[^\s'"<>\\]+ajax\/chanel[^\s'"<>\\]*/gi;
+  const bareRe = /(?:https?:)?\\?\/\\?\/[a-z0-9.-]+[^\s'"<>\\]*(?:\\\/[^\s'"<>\\]*)*/gi;
   while ((m = bareRe.exec(html)) !== null) add(m[0].startsWith('//') ? 'https:' + m[0] : m[0]);
   return found;
 }
@@ -2155,6 +2162,8 @@ function extractXoilacM3u8(html, iframeUrl) {
 function xoilacEmbedUrl(u) {
   try {
     const p = new URL(u);
+    // The old channel host needs this suffix; rotating hosts should be fetched as supplied.
+    if (!XOILAC_HOST_RE.test(p.hostname) && !/ajax\/chanel/i.test(p.pathname)) return p.href;
     if (!/\/off-tvc\/?$/i.test(p.pathname)) p.pathname = p.pathname.replace(/\/+$/, '') + '/off-tvc';
     if (!p.searchParams.has('is_off_add')) p.searchParams.set('is_off_add', 'false');
     return p.href;
@@ -2196,6 +2205,14 @@ async function resolveXoilac(pageUrl) {
   }
   try {
     const html = await fetchProxied(pageUrl);
+    const pageM3u8 = extractXoilacM3u8(html, pageUrl);
+    if (pageM3u8) {
+      GA.send('xoilac_page_m3u8_extracted', { page_url: pageUrl.slice(0, 100), stream_url: pageM3u8.slice(0, 100) });
+      return [
+        { type: 'hls', url: pageM3u8, originalUrl: pageUrl, customLabel: 'Xoilac HLS', fromXoilac: true, extractedFromIframe: true, pageUrl },
+        { type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac page fallback', fromXoilac: true },
+      ];
+    }
     const iframes = extractXoilacIframeUrls(html, pageUrl);
     if (!iframes.length) {
       LOG('[player] xoilac: no iframe URLs on page', pageUrl);
@@ -2216,11 +2233,13 @@ async function resolveXoilac(pageUrl) {
       if (error) {
         LOG('[player] xoilac iframe fetch failed', iframeUrl, error);
         GA.send('xoilac_channel_fail', { iframe_url: iframeUrl.slice(0, 100), error });
+        results.push({ type: 'embed', url: iframeUrl, embedUrls: [iframeUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true });
         return;
       }
       if (!m3u8) {
         LOG('[player] xoilac iframe has no .m3u8', iframeUrl);
         GA.send('xoilac_channel_no_m3u8', { iframe_url: iframeUrl.slice(0, 100) });
+        results.push({ type: 'embed', url: iframeUrl, embedUrls: [iframeUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true });
         return;
       }
       if (seen.has(m3u8)) {
