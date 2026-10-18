@@ -2157,6 +2157,22 @@ function extractXoilacM3u8(html, iframeUrl) {
   }
   return '';
 }
+const XOILAC_PAGE_MIRRORS = ['globaldispatchespodcast.com', 'columbiaenvironmentallaw.org', 'xoilaczzz.pro'];
+function xoilacPageCandidates(pageUrl) {
+  const out = [pageUrl];
+  try {
+    const original = new URL(pageUrl);
+    if (!/^\/truc-tiep\//i.test(original.pathname)) return out;
+    const host = original.hostname.replace(/^www\./i, '').toLowerCase();
+    if (!XOILAC_PAGE_MIRRORS.includes(host)) return out;
+    XOILAC_PAGE_MIRRORS.forEach(domain => {
+      const candidate = new URL(original.href);
+      candidate.hostname = domain;
+      if (!out.includes(candidate.href)) out.push(candidate.href);
+    });
+  } catch {}
+  return out;
+}
 // The match page stores bare iframe URLs (".../link/channel5") in a list_stream array and its own JS
 // appends "/off-tvc" and "?is_off_add=false" before embedding; do the same so we get the ad-free wrapper.
 function xoilacEmbedUrl(u) {
@@ -2204,8 +2220,22 @@ async function resolveXoilac(pageUrl) {
     return [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true }];
   }
   try {
-    const html = await fetchProxied(pageUrl);
-    const pageM3u8 = extractXoilacM3u8(html, pageUrl);
+    const candidates = xoilacPageCandidates(pageUrl);
+    const attempts = candidates.map(async candidate => {
+      const html = await fetchProxied(candidate);
+      const pageM3u8 = extractXoilacM3u8(html, candidate);
+      const iframes = extractXoilacIframeUrls(html, candidate);
+      if (!pageM3u8 && !iframes.length) throw new Error('No Xoilac stream or iframe found');
+      return { candidate, html, pageM3u8, iframes };
+    });
+    const resolved = await Promise.any(attempts);
+    if (resolved.candidate !== pageUrl) {
+      LOG('[player] xoilac: resolved via mirror', resolved.candidate);
+      GA.send('xoilac_mirror_used', { requested_url: pageUrl.slice(0, 100), resolved_url: resolved.candidate.slice(0, 100) });
+      pageUrl = resolved.candidate;
+    }
+    const html = resolved.html;
+    const pageM3u8 = resolved.pageM3u8;
     if (pageM3u8) {
       GA.send('xoilac_page_m3u8_extracted', { page_url: pageUrl.slice(0, 100), stream_url: pageM3u8.slice(0, 100) });
       return [
@@ -2213,7 +2243,7 @@ async function resolveXoilac(pageUrl) {
         { type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac page fallback', fromXoilac: true },
       ];
     }
-    const iframes = extractXoilacIframeUrls(html, pageUrl);
+    const iframes = resolved.iframes;
     if (!iframes.length) {
       LOG('[player] xoilac: no iframe URLs on page', pageUrl);
       GA.send('xoilac_no_iframes', { page_url: pageUrl.slice(0, 80), html_len: html.length });
