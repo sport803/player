@@ -923,8 +923,22 @@ function getP(name) {
   return RAW_PARAMS[k] || [];
 }
 function getRawP(name) { return RAW_PARAMS[name]?.[0] || ''; }
-const moraP = getP('mora').filter(safe);
-const liveUrlP = getP('liveUrl').filter(safe);
+function expandMediaParam(raw) {
+  let value = normalizeStreamUrl(raw);
+  if (!value) return [];
+  // Query parsers turn an unescaped base64 '+' into a space; restore it only
+  // for a base64-looking non-URL value before attempting nested decoding.
+  if (!/^https?:\/\//i.test(value) && /^[A-Za-z0-9_\-/=\s+]+$/.test(value)) value = value.replace(/ /g, '+');
+  const decoded = decodeNestedValue(value, !/^https?:\/\//i.test(value));
+  const roots = [value, decoded].filter((v, i, a) => v && a.indexOf(v) === i && safe(v));
+  const media = roots.flatMap(root => extractNestedMediaUrls(root));
+  // Keep wrappers behind HLS: iOS may detect the signed manifest but reject it
+  // due to provider origin/referrer policy, while the provider iframe can play.
+  if (media.length) return [...new Set([...media, ...roots])];
+  return roots;
+}
+const moraP = getP('mora').flatMap(expandMediaParam).filter(safe);
+const liveUrlP = getP('liveUrl').flatMap(expandMediaParam).filter(safe);
 const embedP = getP('embed').filter(safe);
 const oneP = getP('one').filter(safe);
 const xoilacP = getP('xoilac').filter(safe);
@@ -1028,7 +1042,8 @@ function noteSilentSwitch() {
   const now = Date.now();
   while (lastSwitchTimes[0] && now - lastSwitchTimes[0] > 20000) lastSwitchTimes.shift();
   lastSwitchTimes.push(now);
-  return lastSwitchTimes.length <= 3;
+  // Permit a full pass through resolved candidates; failedStreams prevents loops.
+  return lastSwitchTimes.length <= Math.max(3, streams.length);
 }
 function silentFailover(trigger, reason = 'stream_failed') {
   if (streams.length <= 1 || !noteSilentSwitch()) return false;
@@ -1911,6 +1926,7 @@ function decodeDisplayText(value, fallback = '') {
 }
 
 const isHDJ = l => /\bHD[\s_.-]*J\b/i.test(String(l || ''));
+const isIgnoredOneballLabel = l => /^\s*HD[\s_.-]*B(?:\b|\s*\()/i.test(String(l || '')) || (isIOS() && /^\s*HD[\s_.-]*P(?:remium)?(?:\b|\s*\()/i.test(String(l || '')));
 function oneballEntries(embedUrl, label, pageUrl) {
   const cleanLabel = decodeDisplayText(label, 'Stream');
   const mediaUrls = extractNestedMediaUrls(embedUrl);
@@ -1944,7 +1960,10 @@ async function fetchOneballSignals(pageUrl, eventId) {
     routes.forEach(u => attempts.push((async () => {
       const res = await fetchWithTimeout(u, 6000, { cache: 'no-store', credentials: 'omit' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const body = await res.text();
+      if (!body || /^\s*</.test(body)) throw new Error('OneBall API returned HTML instead of JSON');
+      let data;
+      try { data = JSON.parse(body); } catch { throw new Error('OneBall API returned invalid JSON'); }
       if (!Array.isArray(data?.signals) || !data.signals.length) throw new Error('no signals');
       return data;
     })()));
@@ -1964,6 +1983,11 @@ async function resolveOneballApi(pageUrl) {
     const results = [];
     const seen = new Set();
     signals.slice().sort((a, b) => (Number(isHDJ(b?.label)) - Number(isHDJ(a?.label))) || (Number(a?.sort_order) || 0) - (Number(b?.sort_order) || 0)).forEach((signal, index) => {
+      if (isIgnoredOneballLabel(signal?.label)) {
+        LOG('[player] skipping unsupported iOS OneBall source', signal?.label);
+        GA.send('oneball_ios_source_skipped', { label: String(signal?.label || '').slice(0, 60) });
+        return;
+      }
       const url = normalizeStreamUrl(signal?.url || '');
       if (!url || !safe(url) || seen.has(url)) return;
       seen.add(url);
@@ -2037,6 +2061,10 @@ async function resolveOneball(pageUrl) {
       if (!decoded || !safe(decoded) || seen.has(decoded)) return;
       seen.add(decoded);
       const label = a.label || `Stream ${results.length + 1}`;
+      if (isIgnoredOneballLabel(label)) {
+        LOG('[player] skipping unsupported iOS OneBall page source', label);
+        return;
+      }
       const embedUrl = a.playType === 'm3u8' || /\.m3u8(?:[?#]|$)/i.test(decoded)
         ? oneballEmbedUrl(decoded, label)
         : decoded;
@@ -2054,7 +2082,7 @@ async function resolveOneball(pageUrl) {
 
 /* ── Xoilac resolver ── */
 /*
- * Xoilac match pages (<xoilac-domain>/truc-tiep/<slug>/, e.g. globaldispatchespodcast.com) expose their streams in two layers:
+ * Xoilac match pages (xoilaczzz.pro/truc-tiep/...) expose their streams in two layers:
  *   1. Outer page: channel buttons ("NICK", "HD NICK", "Tom" ...). Depending on the template the iframe
  *      URL comes from a list_stream array in an inline script ("https:\/\/xlz.domainkqt.cc\/ajax\/chanel\/..."),
  *      or from onclick go('<iframe-url>') / data-url / data-src / href attributes. The iframe URL lives on xlz.domainkqt.cc / domainkqt.cc or has
@@ -2100,11 +2128,8 @@ function extractXoilacIframeUrls(html, pageUrl) {
       });
     } catch {}
   }
-  // Inline scripts carry the URLs JSON-escaped (https:\/\/host\/ajax\/chanel\/...). Un-escape, then take every URL
-  // and let isXoilacIframeUrl decide (domainkqt.cc host or /ajax/chanel/ path), so a changed iframe host still works.
-  const flat = html.replace(/\\\//g, '/').replace(/\\u0026/gi, '&');
-  const urlRe = /https?:\/\/[^\s'"<>\\)]+/gi;
-  while ((m = urlRe.exec(flat)) !== null) add(m[0]);
+  const bareRe = /(?:https?:)?\\?\/\\?\/[a-z0-9.-]*domainkqt\.cc[^\s'"<>\\]*(?:\\\/[^\s'"<>\\]*)*|https?:\/\/[^\s'"<>\\]+ajax\/chanel[^\s'"<>\\]*/gi;
+  while ((m = bareRe.exec(html)) !== null) add(m[0].startsWith('//') ? 'https:' + m[0] : m[0]);
   return found;
 }
 function extractXoilacM3u8(html, iframeUrl) {
@@ -2148,44 +2173,35 @@ async function fetchXoilacIframe(iframeUrl, pageUrl) {
   }
   return fetchProxied(iframeUrl);
 }
-// Xoilac moves between domains (xoilaczzz.pro -> globaldispatchespodcast.com). Match pages keep the same
-// /truc-tiep/<slug>/ path, so a link on an older domain is also tried on the others, in parallel.
-const XOILAC_DOMAINS = ['globaldispatchespodcast.com', 'xoilaczzz.pro'];
-function xoilacPageCandidates(pageUrl) {
-  const out = [pageUrl];
-  try {
-    const u = new URL(pageUrl);
-    if (XOILAC_DOMAINS.includes(u.hostname.replace(/^www\./, '')) && /^\/truc-tiep\//i.test(u.pathname)) {
-      XOILAC_DOMAINS.forEach(d => { const v = new URL(u.href); v.hostname = d; if (!out.includes(v.href)) out.push(v.href); });
-    }
-  } catch {}
-  return out;
-}
 async function resolveXoilac(pageUrl) {
   if (!safe(pageUrl)) return [];
   const t0 = Date.now();
   GA.send('xoilac_resolve_start', { page_url: pageUrl.slice(0, 80) });
-  try {
-    const pageAttempts = xoilacPageCandidates(pageUrl).map(async candidate => {
-      const html = await fetchProxied(candidate);
-      const found = extractXoilacIframeUrls(html, candidate);
-      if (!found.length) throw Object.assign(new Error('no iframes'), { htmlLen: html.length });
-      return { usedUrl: candidate, iframes: found };
-    });
-    let picked;
-    try { picked = await Promise.any(pageAttempts); }
-    catch (agg) {
-      const errs = agg?.errors || [agg];
-      if (errs.some(x => x?.message === 'no iframes')) {
-        LOG('[player] xoilac: no iframe URLs on page', pageUrl);
-        GA.send('xoilac_no_iframes', { page_url: pageUrl.slice(0, 80), html_len: errs.find(x => x?.htmlLen != null)?.htmlLen || 0 });
-        return [];
+  // A caller may provide the channel iframe itself rather than the match page.
+  // Probe that URL directly for the manifest so it becomes a native HLS source.
+  if (isXoilacIframeUrl(pageUrl)) {
+    try {
+      const iframeHtml = await fetchXoilacIframe(pageUrl, pageUrl);
+      const m3u8 = extractXoilacM3u8(iframeHtml, pageUrl);
+      if (m3u8) {
+        GA.send('xoilac_direct_iframe_hls', { iframe_url: pageUrl.slice(0, 100), stream_url: m3u8.slice(0, 100) });
+        return [
+          { type: 'hls', url: m3u8, originalUrl: pageUrl, customLabel: 'Xoilac HLS', fromXoilac: true, extractedFromIframe: true, pageUrl },
+          { type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true },
+        ];
       }
-      throw errs[0] || agg;
+      LOG('[player] direct xoilac iframe contained no m3u8', pageUrl);
+    } catch (e) { LOG('[player] direct xoilac iframe probe failed', e?.message || e); }
+    return [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac iframe fallback', fromXoilac: true }];
+  }
+  try {
+    const html = await fetchProxied(pageUrl);
+    const iframes = extractXoilacIframeUrls(html, pageUrl);
+    if (!iframes.length) {
+      LOG('[player] xoilac: no iframe URLs on page', pageUrl);
+      GA.send('xoilac_no_iframes', { page_url: pageUrl.slice(0, 80), html_len: html.length });
+      return safe(pageUrl) ? [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac page', fromXoilac: true }] : [];
     }
-    const iframes = picked.iframes;
-    if (picked.usedUrl !== pageUrl) LOG('[player] xoilac: resolved via mirror', picked.usedUrl);
-    pageUrl = picked.usedUrl;
     GA.send('xoilac_iframes_found', { page_url: pageUrl.slice(0, 80), count: iframes.length });
 
     // Fetch every iframe page in parallel (through the proxy chain); keep results in page order.
@@ -2222,11 +2238,20 @@ async function resolveXoilac(pageUrl) {
       GA.send('xoilac_channel_ok', { label: customLabel, iframe_url: iframeUrl.slice(0, 100), stream_url: m3u8.slice(0, 100) });
     });
 
+    // Keep the match page itself as a final option if extracted HLS fails.
+    // loadStreams() sorts direct HLS ahead of all iframe sources.
+    if (safe(pageUrl)) {
+      results.push({
+        type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl,
+        customLabel: results.some(x => x.type === 'hls') ? 'Xoilac page fallback' : 'Xoilac page',
+        fromXoilac: true,
+      });
+    }
     GA.send('xoilac_resolve_success', { page_url: pageUrl.slice(0, 80), stream_count: results.length, iframe_count: iframes.length, resolve_ms: Date.now() - t0 });
     return results;
   } catch (e) {
     GA.send('xoilac_resolve_fail', { page_url: pageUrl.slice(0, 80), error: (e?.message || 'unknown').slice(0, 120) });
-    return [];
+    return safe(pageUrl) ? [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac page fallback', fromXoilac: true }] : [];
   }
 }
 
@@ -2235,6 +2260,26 @@ async function resolveStream(url) {
   const originalUrl = url;
   url = normalizeStreamUrl(url);
   if (!safe(url)) throw new Error('Invalid stream URL');
+  // Use embed.st through its own provider player when passed via mora=.
+  // This preserves the provider's supported session/origin context rather
+  // than extracting a restricted CDN URL and replaying it cross-origin.
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'embed.st' || parsed.hostname.endsWith('.embed.st')) {
+      const slug = parsed.pathname.split('/').filter(Boolean).pop() || 'stream';
+      return {
+        type: 'embed', url, embedUrls: [url], originalUrl: originalUrl || url,
+        customLabel: `PPV ${slug}`, fromEmbedSt: true,
+      };
+    }
+  } catch {}
+  // Keep the upstream player page available behind its extracted HLS URL.
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'player.online878.com' && /\/live\/index\.html$/i.test(parsed.pathname)) {
+      return { type: 'embed', url, embedUrls: [url], originalUrl: originalUrl || url, customLabel: 'Vivo player fallback', fromOneball: true };
+    }
+  } catch {}
   const ck = CFG.CACHE_PREFIX + url;
   const c = cGet(ck);
   if (c) { GA.send('stream_cache_hit', { stream_url: url.slice(0, 80), stream_type: c.type }); return c; }
@@ -2887,12 +2932,17 @@ const ADAPTERS = [
     async load() {},
     init(hid, s) {
       return withTO(new Promise((res, rej) => {
-        const v = newVid({ controls: true, muted: true, playsinline: true });
+        const v = newVid({ controls: true, muted: true, playsinline: true, preload: 'auto' });
+        v.setAttribute('webkit-playsinline', '');
+        v.setAttribute('playsinline', '');
         v.src = s.url;
         document.getElementById(hid).appendChild(v);
+        try { v.load(); } catch {}
         curPlayer = v; instances.push(v);
         GA.attachVideo(v, 'native-hls');
-        v.addEventListener('loadedmetadata', () => { safePlay(v); res(); }, { once: true });
+        const ready = () => { safePlay(v); res(); };
+        v.addEventListener('loadedmetadata', ready, { once: true });
+        v.addEventListener('canplay', ready, { once: true });
         v.addEventListener('error', () => rej(new Error('Native HLS failed')), { once: true });
       }), isSignedUrl(s.url) ? CFG.SIGNED_PLAYER_TO : 20000);
     },
