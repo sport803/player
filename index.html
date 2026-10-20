@@ -1424,31 +1424,44 @@ async function safePlay(v) {
 function proxyEncodedOnce(url) {
   return encodeURIComponent(String(url));
 }
-function proxyTarget(endpoint, url) {
-  const encoded = proxyEncodedOnce(url);
+function refForUrl(u) {
+  let h = '';
+  try { h = new URL(u).hostname.toLowerCase(); } catch {}
+  if (/(^|\.)(vivo155\.com|online878\.com)$/.test(h)) return 'https://player.online878.com/';
+  if (/(^|\.)(domainkqt\.cc|xoilaczzz\.pro)$/.test(h)) return 'https://xoilaczzz.pro/';
+  if (/(^|\.)(oneball\.live|luxiang\.win)$/.test(h)) return 'https://oneball.live/';
+  return refP || '';
+}
+function proxyTarget(endpoint, url, ref = '') {
+  const encoded = encodeURIComponent(String(url));
   if (endpoint.includes('{url}')) return endpoint.replace('{url}', encoded);
-  if (/[?&](?:url|quest)=?$/i.test(endpoint) || endpoint.endsWith('=')) return endpoint + encoded + ((CFG.OWN_PROXY && endpoint === CFG.OWN_PROXY && refP) ? '&ref=' + encodeURIComponent(refP) : '');
+  if (/[?&](?:url|quest)=?$/i.test(endpoint) || endpoint.endsWith('=')) {
+    const isOwn = CFG.OWN_PROXY && endpoint === CFG.OWN_PROXY;
+    return endpoint + encoded + (isOwn ? '&ref=' + encodeURIComponent(ref || refForUrl(url)) : '');
+  }
   return endpoint.replace(/\/?$/, '/') + encoded;
 }
-function rewriteProxyUrl(url, fallback = false) {
+function rewriteProxyUrl(url, fallback = false, ref = '') {
   if (!url) return url;
-  // Worker is used only as a CORS fallback (direct first) to save free-tier quota.
-  if (CFG.OWN_PROXY) return fallback ? proxyTarget(CFG.OWN_PROXY, url) : url;
+  if (CFG.OWN_PROXY) return fallback ? proxyTarget(CFG.OWN_PROXY, url, ref) : url;
   return fallback ? proxyTarget('https://corsproxy.io/?url=', url) : url;
 }
-async function fetchProxied(url) {
+async function fetchProxied(url, ref = '') {
+  if (CFG.OWN_PROXY) {
+    try {
+      const r = await fetchWithTimeout(proxyTarget(CFG.OWN_PROXY, url, ref), CFG.PROXY_TO, { cache: 'no-store', credentials: 'omit' });
+      if (r.ok) return await r.text();
+      LOG('[player] worker HTTP', r.status, url);
+    } catch (e) { LOG('[player] worker failed', e?.message || e); }
+  }
   try {
     const direct = await fetchWithTimeout(url, CFG.PROXY_TO, { cache: 'no-store', credentials: 'omit' });
     if (direct.ok) return await direct.text();
   } catch {}
-  if (CFG.OWN_PROXY) {
-    try { const r = await fetchWithTimeout(proxyTarget(CFG.OWN_PROXY, url), CFG.PROXY_TO); if (r.ok) return await r.text(); } catch {}
-  }
   const order = [...CFG.PSCORE.keys()].sort((a, b) => CFG.PSCORE[b] - CFG.PSCORE[a]);
   let last;
   for (const i of order) {
     const pu = i === 0 ? proxyTarget('https://corsproxy.io/?url=', url) : CFG.PROXY[i](url);
-    LOG('[player] proxy request', pu);
     const t0 = Date.now();
     GA.sendSampled('proxy_attempt', 'pa_' + i, { proxy_name: CFG.PROXY_NAMES[i], target_url: url.slice(0, 80) }, 0);
     try {
@@ -1460,7 +1473,6 @@ async function fetchProxied(url) {
       GA.sendSampled('proxy_success', 'ps_' + i, { proxy_name: CFG.PROXY_NAMES[i], response_ms: Date.now() - t0 }, 0);
       return t;
     } catch (e) {
-      LOG('[player] proxy failed', CFG.PROXY_NAMES[i], e?.message || e);
       CFG.PSCORE[i] = Math.max(0, CFG.PSCORE[i] - 1);
       GA.sendSampled('proxy_fail', 'pf_' + i, { proxy_name: CFG.PROXY_NAMES[i], error_message: e?.message || 'unknown' }, 0);
       last = e;
@@ -1468,6 +1480,7 @@ async function fetchProxied(url) {
   }
   throw last || new Error('All proxies failed');
 }
+
 
 /* ── Cache ── */
 function cGet(k) {
@@ -1951,27 +1964,37 @@ function oneballEntries(embedUrl, label, pageUrl) {
 }
 
 async function fetchOneballSignals(pageUrl, eventId) {
-  // Race every route at once (direct + own worker, oneball.live + the page's own host); first valid answer wins.
   const hosts = new Set(['https://oneball.live']);
   try { hosts.add(new URL(pageUrl).origin); } catch {}
-  const attempts = [];
-  hosts.forEach(h => {
-    const api = `${h}/api/live/${eventId}.json`;
-    const routes = [api];
-    if (CFG.OWN_PROXY) routes.push(proxyTarget(CFG.OWN_PROXY, api));
-    routes.forEach(u => attempts.push((async () => {
-      const res = await fetchWithTimeout(u, 6000, { cache: 'no-store', credentials: 'omit' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = await res.text();
-      if (!body || /^\s*</.test(body)) throw new Error('OneBall API returned HTML instead of JSON');
-      let data;
-      try { data = JSON.parse(body); } catch { throw new Error('OneBall API returned invalid JSON'); }
-      if (!Array.isArray(data?.signals) || !data.signals.length) throw new Error('no signals');
-      return data;
-    })()));
-  });
-  return Promise.any(attempts);
+  const ref = 'https://oneball.live/';
+  const apis = [...hosts].map(h => `${h}/api/live/${eventId}.json`);
+
+  const grab = async u => {
+    const res = await fetchWithTimeout(u, 6000, { cache: 'no-store', credentials: 'omit' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    let body = await res.text();
+    if (!body || /^\s*</.test(body)) throw new Error('OneBall API returned HTML instead of JSON');
+    let data;
+    try { data = JSON.parse(body); } catch { throw new Error('OneBall API returned invalid JSON'); }
+    if (typeof data?.contents === 'string') { try { data = JSON.parse(data.contents); } catch {} }
+    if (!Array.isArray(data?.signals) || !data.signals.length) throw new Error('no signals');
+    return data;
+  };
+
+  const tiers = [
+    () => CFG.OWN_PROXY ? apis.map(a => proxyTarget(CFG.OWN_PROXY, a, ref)) : [],
+    () => apis,
+    () => apis.flatMap(a => CFG.PROXY.map(fn => fn(a))),
+  ];
+  let lastErr;
+  for (const tier of tiers) {
+    const urls = tier();
+    if (!urls.length) continue;
+    try { return await Promise.any(urls.map(grab)); } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('OneBall API unreachable');
 }
+
 
 async function resolveOneballApi(pageUrl) {
   if (!safe(pageUrl)) return [];
@@ -2030,7 +2053,7 @@ async function resolveOneball(pageUrl) {
   const t0 = Date.now();
   GA.send('oneball_resolve_start', { page_url: pageUrl.slice(0, 80) });
   try {
-    const html = await fetchProxied(pageUrl);
+    const html = await fetchProxied(pageUrl, 'https://oneball.live/');
     let anchors = [];
     if (typeof DOMParser !== 'undefined') {
       try {
@@ -2096,10 +2119,21 @@ async function resolveOneball(pageUrl) {
  * channel is returned (labelled "Xoilac N" from the channel<N> segment; duplicate .m3u8 URLs skipped).
  */
 const XOILAC_HOST_RE = /(?:^|\.)domainkqt\.cc$/i;
+function xoilacLiveUrlParam(u) {
+  try {
+    const p = new URL(u);
+    let v = p.searchParams.get('liveUrl') || p.searchParams.get('liveurl') || '';
+    if (!v) return '';
+    if (!/^https?:\/\//i.test(v)) { try { v = decodeURIComponent(v); } catch {} }
+    return safe(v) && /\.m3u8(?:[?#&]|$)/i.test(v) ? v : '';
+  } catch { return ''; }
+}
 function isXoilacIframeUrl(u) {
   try {
     const p = new URL(u);
-    return XOILAC_HOST_RE.test(p.hostname) || /(?:ajax\/chanel|channel|iframe|player|stream|\/play\/|\/embed\/)/i.test(p.pathname);
+    return XOILAC_HOST_RE.test(p.hostname)
+      || /(?:^|\.)online878\.com$/i.test(p.hostname)
+      || /(?:ajax\/chanel|channel|iframe|player|stream|\/play\/|\/embed\/)/i.test(p.pathname);
   } catch { return false; }
 }
 function xoilacCleanRaw(raw, base) {
@@ -2144,6 +2178,11 @@ function extractXoilacM3u8(html, iframeUrl) {
     const u = xoilacCleanRaw(raw, iframeUrl);
     return u && safe(u) && /\.m3u8(?:[?#]|$)/i.test(u) ? u : '';
   };
+  const fromParam = xoilacLiveUrlParam(iframeUrl);
+  if (fromParam) return fromParam;
+  const nested = String(html).replace(/\\\//g, '/').replace(/&amp;/g, '&')
+    .match(/https?:\/\/[^\s"'<>\\]*[?&]liveUrl=[^\s"'<>\\]+/i);
+  if (nested) { const u = xoilacLiveUrlParam(nested[0]); if (u) return u; }
   const patterns = [
     /\burlStream\s*=\s*["']([^"']+)["']/i,
     /\bfile\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i,
@@ -2198,21 +2237,22 @@ function xoilacChannelKey(u) {
 async function fetchXoilacIframe(iframeUrl, pageUrl, ms = 7000) {
   let ref = '';
   try { ref = new URL(pageUrl).origin + '/'; } catch {}
-  const routes = [];
-  if (CFG.OWN_PROXY) routes.push({ name: 'worker', u: CFG.OWN_PROXY + encodeURIComponent(iframeUrl) + (ref ? '&ref=' + encodeURIComponent(ref) : '') });
-  routes.push({ name: 'corsproxy', u: proxyTarget('https://corsproxy.io/?url=', iframeUrl) });
-  try {
-    return await Promise.any(routes.map(async r => {
-      const res = await fetchWithTimeout(r.u, ms, { cache: 'no-store', credentials: 'omit' });
-      LOG('[player] xoilac', r.name, 'status', res.status, iframeUrl);
-      if (!res.ok) throw new Error(`${r.name} HTTP ${res.status}`);
-      const text = await res.text();
-      if (!text || text.length < 20) throw new Error(`${r.name} empty body`);
-      return text;
-    }));
-  } catch (e) {
-    throw new Error(((e && e.errors) || [e]).map(x => x?.message || String(x)).join(' | ').slice(0, 160));
+  const get = async (name, u) => {
+    const res = await fetchWithTimeout(u, ms, { cache: 'no-store', credentials: 'omit' });
+    LOG('[player] xoilac', name, 'status', res.status, iframeUrl);
+    if (!res.ok) throw new Error(`${name} HTTP ${res.status}`);
+    const t = await res.text();
+    if (!t || t.length < 20) throw new Error(`${name} empty body`);
+    return t;
+  };
+  const errs = [];
+  if (CFG.OWN_PROXY) {
+    try { return await get('worker', proxyTarget(CFG.OWN_PROXY, iframeUrl, ref)); }
+    catch (e) { errs.push(e?.message || String(e)); }
   }
+  try { return await get('corsproxy', proxyTarget('https://corsproxy.io/?url=', iframeUrl)); }
+  catch (e) { errs.push(e?.message || String(e)); }
+  throw new Error(errs.join(' | ').slice(0, 160));
 }
 
 async function xoilacPool(items, limit, fn) {
@@ -2250,7 +2290,7 @@ async function resolveXoilac(pageUrl) {
   try {
     const candidates = xoilacPageCandidates(pageUrl);
     const attempts = candidates.map(async candidate => {
-      const html = await fetchProxied(candidate);
+      const html = await fetchProxied(candidate, new URL(candidate).origin + '/');
       const pageM3u8 = extractXoilacM3u8(html, candidate);
       const iframes = extractXoilacIframeUrls(html, candidate);
       if (!pageM3u8 && !iframes.length) throw new Error('No Xoilac stream or iframe found');
@@ -2287,6 +2327,8 @@ async function resolveXoilac(pageUrl) {
     let checked = 0;
     const fetched = await xoilacPool(picked, 4, async iframeUrl => {
       try {
+        const direct = xoilacLiveUrlParam(iframeUrl);
+        if (direct) return { iframeUrl, m3u8: direct, htmlLen: 0 };
         const body = await fetchXoilacIframe(xoilacEmbedUrl(iframeUrl), pageUrl);
         const m3u8 = extractXoilacM3u8(body, iframeUrl);
         if (!m3u8) LOG('[player] xoilac iframe body (no m3u8)', iframeUrl, body.slice(0, 200));
@@ -2301,7 +2343,7 @@ async function resolveXoilac(pageUrl) {
 
     const seen = new Set();
     const results = [];
-    fetched.forEach(({ iframeUrl, m3u8, error }) => {
+    fetched.forEach(({ iframeUrl, m3u8, error, htmlLen }) => {
       if (error) {
         LOG('[player] xoilac iframe fetch failed', iframeUrl, error);
         GA.send('xoilac_channel_fail', { stage: 'iframe_fetch', iframe_url: iframeUrl.slice(0, 100), error });
@@ -3020,20 +3062,37 @@ const ADAPTERS = [
     supports: s => s.type === 'hls' && isIOS(),
     async load() {},
     init(hid, s) {
-      return withTO(new Promise((res, rej) => {
+      const host = document.getElementById(hid);
+      let lastV = null;
+      const once = (src, ms) => withTO(new Promise((res, rej) => {
         const v = newVid({ controls: true, muted: true, playsinline: true, preload: 'auto' });
         v.setAttribute('webkit-playsinline', '');
         v.setAttribute('playsinline', '');
-        v.src = s.url;
-        document.getElementById(hid).appendChild(v);
+        v.src = src;
+        host.appendChild(v);
         try { v.load(); } catch {}
-        curPlayer = v; instances.push(v);
+        lastV = v; curPlayer = v; instances.push(v);
         GA.attachVideo(v, 'native-hls');
         const ready = () => { safePlay(v); res(); };
         v.addEventListener('loadedmetadata', ready, { once: true });
         v.addEventListener('canplay', ready, { once: true });
         v.addEventListener('error', () => rej(new Error('Native HLS failed')), { once: true });
-      }), isSignedUrl(s.url) ? CFG.SIGNED_PLAYER_TO : 20000);
+      }), ms);
+      const cleanup = () => {
+        if (!lastV) return;
+        destroyInstance(lastV);
+        instances = instances.filter(x => x !== lastV);
+        try { lastV.remove(); } catch {}
+        lastV = null; curPlayer = null;
+      };
+      const ms = isSignedUrl(s.url) ? CFG.SIGNED_PLAYER_TO : 20000;
+      return once(s.url, ms).catch(e => {
+        if (!CFG.OWN_PROXY) throw e;
+        cleanup();
+        toast('Retrying via proxy…');
+        GA.send('proxy_retry', { adapter_name: 'native-hls', signed: isSignedUrl(s.url), target_url: s.url.slice(0, 120) });
+        return once(proxyTarget(CFG.OWN_PROXY, s.url, refForUrl(s.url)), 20000);
+      });
     },
   },
   {
@@ -3219,9 +3278,18 @@ const ADAPTERS = [
                 }
                 if (d.type === Hls.ErrorTypes.NETWORK_ERROR && !corsError) { h.startLoad(); return; }
               } else if (d.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                // Signed URL: 401/403/404/410 or CORS (code 0) will not fix itself -> fail fast so the next source is tried.
                 const rc = d.response?.code;
-                const hard = rc === 0 || [401, 403, 404, 410].includes(rc);
+                const blocked = rc === 0 || rc === 401 || rc === 403;
+                const hard = blocked || rc === 404 || rc === 410;
+                if (blocked && !retriedProxy && CFG.OWN_PROXY) {
+                  retriedProxy = true; iframeFallbackUrl = s.url;
+                  toast('Retrying via proxy…');
+                  GA.send('proxy_retry', { adapter_name: 'hlsjs', signed: true, target_url: s.url.slice(0, 120) });
+                  h.stopLoad();
+                  h.loadSource(proxyTarget(CFG.OWN_PROXY, s.url, refForUrl(s.url)));
+                  h.startLoad();
+                  return;
+                }
                 if (!hard && signedRetries++ < 2) { h.startLoad(); return; }
               }
               if (d.type === Hls.ErrorTypes.MEDIA_ERROR) { h.recoverMediaError(); return; }
