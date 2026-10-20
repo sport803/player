@@ -2146,7 +2146,9 @@ function extractXoilacIframeUrls(html, pageUrl) {
   const found = [];
   const add = (raw, force = false) => {
     const u = xoilacCleanRaw(raw, pageUrl);
-    if (u && safe(u) && (force || isXoilacIframeUrl(u)) && !found.includes(u)) found.push(u);
+    if (!u || !safe(u)) return;
+    try { if (/^\/truc-tiep\//i.test(new URL(u).pathname)) return; } catch { return; } // same-page nav, not a stream
+    if ((force || isXoilacIframeUrl(u)) && !found.includes(u)) found.push(u);
   };
   // Document order matters (it defines Xoilac 1..N when no channel number exists), so collect from the
   // channel buttons first, then attributes, then bare URLs in scripts.
@@ -2196,7 +2198,7 @@ function extractXoilacM3u8(html, iframeUrl) {
   }
   return '';
 }
-const XOILAC_PAGE_MIRRORS = ['globaldispatchespodcast.com', 'columbiaenvironmentallaw.org', 'xoilaczzz.pro'];
+const XOILAC_PAGE_MIRRORS = ['xoilaczzzx.cc', 'globaldispatchespodcast.com', 'columbiaenvironmentallaw.org', 'xoilaczzz.pro'];
 function xoilacPageCandidates(pageUrl) {
   const out = [pageUrl];
   try {
@@ -2237,22 +2239,30 @@ function xoilacChannelKey(u) {
 async function fetchXoilacIframe(iframeUrl, pageUrl, ms = 7000) {
   let ref = '';
   try { ref = new URL(pageUrl).origin + '/'; } catch {}
-  const get = async (name, u) => {
-    const res = await fetchWithTimeout(u, ms, { cache: 'no-store', credentials: 'omit' });
+  const get = async (name, u, opts = {}) => {
+    const res = await fetchWithTimeout(u, ms, { cache: 'no-store', credentials: 'omit', ...opts });
     LOG('[player] xoilac', name, 'status', res.status, iframeUrl);
-    if (!res.ok) throw new Error(`${name} HTTP ${res.status}`);
+    if (!res.ok) {
+      if (DEBUG) res.clone().text().then(t => console.log('[player] xoilac', name, res.status, 'body:', t.slice(0, 300).replace(/\s+/g, ' '))).catch(() => {});
+      throw new Error(`${name} HTTP ${res.status}`);
+    }
     const t = await res.text();
     if (!t || t.length < 20) throw new Error(`${name} empty body`);
     return t;
   };
   const errs = [];
+  const attempts = [];
   if (CFG.OWN_PROXY) {
-    try { return await get('worker', proxyTarget(CFG.OWN_PROXY, iframeUrl, ref)); }
-    catch (e) { errs.push(e?.message || String(e)); }
+    const base = proxyTarget(CFG.OWN_PROXY, iframeUrl, ref);
+    attempts.push(['worker-nav', base + '&nav=1']);
+    attempts.push(['worker-nav-nofwd', base + '&nav=1&fwd=0']);
   }
-  try { return await get('corsproxy', proxyTarget('https://corsproxy.io/?url=', iframeUrl)); }
-  catch (e) { errs.push(e?.message || String(e)); }
-  throw new Error(errs.join(' | ').slice(0, 160));
+  attempts.push(['direct', iframeUrl]);
+  attempts.push(['corsproxy', proxyTarget('https://corsproxy.io/?url=', iframeUrl)]);
+  for (const [name, u] of attempts) {
+    try { return await get(name, u); } catch (e) { errs.push(e?.message || String(e)); }
+  }
+  throw new Error(errs.join(' | ').slice(0, 200));
 }
 
 async function xoilacPool(items, limit, fn) {
