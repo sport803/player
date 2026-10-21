@@ -2195,23 +2195,45 @@ function extractXoilacServers(html, pageUrl) {
   return out.sort((a, b) => a.idx - b.idx);
 }
 
-// The page's inline script holds ALL channels in a list_stream array; data-link is the index into it.
-// Returns the iframe URLs in array order (assumes one URL per entry).
+// The page's inline script holds channels grouped by server in list_stream; data-link indexes the outer array.
+// Keep each server's candidate URLs grouped so extra alternates don't shift later server indices.
 function extractXoilacListStream(html, pageUrl) {
   const m = html.match(/list_stream\s*[=:]\s*\[/i);
   if (!m) return [];
-  let i = m.index + m[0].length, depth = 1;
-  for (; i < html.length && depth; i++) {
+  const open = html.indexOf('[', m.index);
+  if (open < 0) return [];
+  const items = [];
+  let itemStart = open + 1, depth = 0, quote = '', escaped = false;
+  for (let i = open + 1; i < html.length; i++) {
     const c = html[i];
-    if (c === '[') depth++; else if (c === ']') depth--;
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === quote) quote = '';
+      continue;
+    }
+    if (c === '\'' || c === '"' || c === '`') { quote = c; continue; }
+    if (c === '[' || c === '{') { depth++; continue; }
+    if (c === '}' || (c === ']' && depth > 0)) { depth--; continue; }
+    if (c === ',' && depth === 0) {
+      items.push(html.slice(itemStart, i));
+      itemStart = i + 1;
+      continue;
+    }
+    if (c === ']' && depth === 0) {
+      items.push(html.slice(itemStart, i));
+      break;
+    }
   }
-  const slice = html.slice(m.index, i).replace(/\\\//g, '/').replace(/\\u0026/gi, '&');
-  const urls = [];
-  (slice.match(/https?:\/\/[^\s'"<>\\]+/gi) || []).forEach(raw => {
-    const u = xoilacCleanRaw(raw, pageUrl);
-    if (u && safe(u) && isXoilacIframeUrl(u)) urls.push(u);
+  return items.filter(item => item.trim()).map(item => {
+    const normalized = item.replace(/\\\//g, '/').replace(/\\u0026/gi, '&');
+    const urls = [];
+    (normalized.match(/https?:\/\/[^\s'"<>\\]+/gi) || []).forEach(raw => {
+      const u = xoilacCleanRaw(raw, pageUrl);
+      if (u && safe(u) && isXoilacIframeUrl(u) && !urls.includes(u)) urls.push(u);
+    });
+    return urls;
   });
-  return urls;
 }
 
 // Player iframe actually rendered in a server page's HTML (not a bare URL in a script list).
@@ -2250,7 +2272,7 @@ function extractXoilacM3u8(html, iframeUrl) {
   }
   return '';
 }
-const XOILAC_PAGE_MIRRORS = ['xoilaczzzx.cc', 'globaldispatchespodcast.com', 'columbiaenvironmentallaw.org', 'xoilaczzz.pro'];
+const XOILAC_PAGE_MIRRORS = ['xoilaczzzs.cc', 'xoilaczzzx.cc', 'globaldispatchespodcast.com', 'columbiaenvironmentallaw.org', 'xoilaczzz.pro'];
 function xoilacPageCandidates(pageUrl) {
   const out = [pageUrl];
   try {
@@ -2387,7 +2409,7 @@ async function resolveXoilac(pageUrl) {
 
     let targets;
     if (servers.length) {
-      targets = servers.map(s => ({ label: s.label, iframeUrl: listed[s.idx] || '', pageHref: s.href }));
+      targets = servers.map(s => ({ label: s.label, iframeUrl: (listed[s.idx] || []).find(isXoilacIframeUrl) || '', pageHref: s.href }));
     } else {
       // No buttons recognised: old behaviour, but deduped by channel number and capped.
       const byKey = new Map();
