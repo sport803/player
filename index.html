@@ -2175,6 +2175,58 @@ function extractXoilacIframeUrls(html, pageUrl) {
   while ((m = bareRe.exec(html)) !== null) add(m[0].startsWith('//') ? 'https:' + m[0] : m[0]);
   return found;
 }
+// Server buttons on the match page:
+//   <a class="player-link" title="Server 1" data-link="0" href="<match>/">JOHAN</a>
+//   <a class="player-link" title="Server 2" data-link="1" href="<match>/link/1">HD JOHAN</a>
+function extractXoilacServers(html, pageUrl) {
+  const out = [];
+  if (typeof DOMParser === 'undefined') return out;
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('a.player-link[data-link], a[id^="tv_link_"][data-link]').forEach(a => {
+      const idx = parseInt(a.getAttribute('data-link'), 10);
+      if (!Number.isInteger(idx) || out.some(s => s.idx === idx)) return;
+      const label = decodeDisplayText(a.textContent, a.getAttribute('title') || `Server ${idx + 1}`);
+      let href = '';
+      try { href = new URL(a.getAttribute('href') || '', pageUrl).href; } catch {}
+      out.push({ idx, label, href });
+    });
+  } catch {}
+  return out.sort((a, b) => a.idx - b.idx);
+}
+
+// The page's inline script holds ALL channels in a list_stream array; data-link is the index into it.
+// Returns the iframe URLs in array order (assumes one URL per entry).
+function extractXoilacListStream(html, pageUrl) {
+  const m = html.match(/list_stream\s*[=:]\s*\[/i);
+  if (!m) return [];
+  let i = m.index + m[0].length, depth = 1;
+  for (; i < html.length && depth; i++) {
+    const c = html[i];
+    if (c === '[') depth++; else if (c === ']') depth--;
+  }
+  const slice = html.slice(m.index, i).replace(/\\\//g, '/').replace(/\\u0026/gi, '&');
+  const urls = [];
+  (slice.match(/https?:\/\/[^\s'"<>\\]+/gi) || []).forEach(raw => {
+    const u = xoilacCleanRaw(raw, pageUrl);
+    if (u && safe(u) && isXoilacIframeUrl(u)) urls.push(u);
+  });
+  return urls;
+}
+
+// Player iframe actually rendered in a server page's HTML (not a bare URL in a script list).
+function xoilacDomIframe(html, base) {
+  if (typeof DOMParser === 'undefined') return '';
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    for (const fr of doc.querySelectorAll('iframe[src], iframe[data-src]')) {
+      const u = xoilacCleanRaw(fr.getAttribute('src') || fr.getAttribute('data-src'), base);
+      if (u && safe(u) && isXoilacIframeUrl(u) && !/blogger|google|facebook/i.test(u)) return u;
+    }
+  } catch {}
+  return '';
+}
+
 function extractXoilacM3u8(html, iframeUrl) {
   const pick = raw => {
     const u = xoilacCleanRaw(raw, iframeUrl);
@@ -2303,7 +2355,7 @@ async function resolveXoilac(pageUrl) {
       const html = await fetchProxied(candidate, new URL(candidate).origin + '/');
       const pageM3u8 = extractXoilacM3u8(html, candidate);
       const iframes = extractXoilacIframeUrls(html, candidate);
-      if (!pageM3u8 && !iframes.length) throw new Error('No Xoilac stream or iframe found');
+      if (!pageM3u8 && !iframes.length && !extractXoilacServers(html, candidate).length) throw new Error('No Xoilac stream or iframe found');
       return { candidate, html, pageM3u8, iframes };
     });
     const resolved = await Promise.any(attempts);
@@ -2322,61 +2374,71 @@ async function resolveXoilac(pageUrl) {
       ];
     }
     const iframes = resolved.iframes;
-    if (!iframes.length) {
+    if (!iframes.length && !extractXoilacServers(html, pageUrl).length) {
       LOG('[player] xoilac: no iframe URLs on page', pageUrl);
       GA.send('xoilac_no_iframes', { page_url: pageUrl.slice(0, 80), html_len: html.length });
       return safe(pageUrl) ? [{ type: 'embed', url: pageUrl, embedUrls: [pageUrl], originalUrl: pageUrl, customLabel: 'Xoilac page', fromXoilac: true }] : [];
     }
-    // A match page may list the same channel under several stream types.
-    const byKey = new Map();
-    iframes.forEach(u => { const key = xoilacChannelKey(u); if (!byKey.has(key)) byKey.set(key, u); });
-    const picked = [...byKey.values()].slice(0, 8);
-    GA.send('xoilac_iframes_found', { page_url: pageUrl.slice(0, 80), count: iframes.length, unique: picked.length });
-    LOG('[player] xoilac iframes', picked);
+    // One target per SERVER BUTTON (JOHAN, HD JOHAN, ...), not one per URL found anywhere on the page.
+    const servers = extractXoilacServers(html, pageUrl);
+    const listed = extractXoilacListStream(html, pageUrl);
+    LOG('[player] xoilac servers', servers.map(s => `${s.idx}:${s.label}`), 'list_stream', listed);
+    GA.send('xoilac_servers_found', { page_url: pageUrl.slice(0, 80), servers: servers.length, listed: listed.length, bare: iframes.length });
+
+    let targets;
+    if (servers.length) {
+      targets = servers.map(s => ({ label: s.label, iframeUrl: listed[s.idx] || '', pageHref: s.href }));
+    } else {
+      // No buttons recognised: old behaviour, but deduped by channel number and capped.
+      const byKey = new Map();
+      iframes.forEach(u => { const k = xoilacChannelKey(u); if (!byKey.has(k)) byKey.set(k, u); });
+      targets = [...byKey.values()].slice(0, 8).map(u => ({ label: '', iframeUrl: u, pageHref: '' }));
+    }
 
     let checked = 0;
-    const fetched = await xoilacPool(picked, 4, async iframeUrl => {
+    const fetched = await xoilacPool(targets, 3, async t => {
+      let iframeUrl = t.iframeUrl;
       try {
+        // 1) list_stream[data-link]  2) iframe in this page's own HTML  3) iframe in the /link/N page
+        if (!iframeUrl && t.pageHref === pageUrl) iframeUrl = xoilacDomIframe(html, pageUrl);
+        if (!iframeUrl && t.pageHref && t.pageHref !== pageUrl) {
+          const ph = await fetchXoilacIframe(t.pageHref, pageUrl);
+          iframeUrl = xoilacDomIframe(ph, t.pageHref);
+        }
+        if (!iframeUrl) throw new Error('no iframe URL found for this server');
         const direct = xoilacLiveUrlParam(iframeUrl);
-        if (direct) return { iframeUrl, m3u8: direct, htmlLen: 0 };
+        if (direct) return { iframeUrl, label: t.label, m3u8: direct, htmlLen: 0 };
         const body = await fetchXoilacIframe(xoilacEmbedUrl(iframeUrl), pageUrl);
         const m3u8 = extractXoilacM3u8(body, iframeUrl);
         if (!m3u8) LOG('[player] xoilac iframe body (no m3u8)', iframeUrl, body.slice(0, 200));
-        return { iframeUrl, m3u8, htmlLen: body.length };
+        return { iframeUrl, label: t.label, m3u8, htmlLen: body.length };
       } catch (e) {
-        return { iframeUrl, error: (e?.message || 'unknown').slice(0, 120) };
+        return { iframeUrl: iframeUrl || t.pageHref || '', label: t.label, error: (e?.message || 'unknown').slice(0, 120) };
       } finally {
         checked++;
-        if (!curStream) setLoading(true, `Xoilac: checked ${checked}/${picked.length}…`, 15 + Math.round(checked / picked.length * 25));
+        if (!curStream) setLoading(true, `Xoilac: checked ${checked}/${targets.length}…`, 15 + Math.round(checked / targets.length * 25));
       }
     });
 
     const seen = new Set();
     const results = [];
-    fetched.forEach(({ iframeUrl, m3u8, error, htmlLen }) => {
+    fetched.forEach(({ iframeUrl, label, m3u8, error, htmlLen }) => {
       if (error) {
-        LOG('[player] xoilac iframe fetch failed', iframeUrl, error);
-        GA.send('xoilac_channel_fail', { stage: 'iframe_fetch', iframe_url: iframeUrl.slice(0, 100), error });
+        LOG('[player] xoilac server failed', label, iframeUrl, error);
+        GA.send('xoilac_channel_fail', { stage: 'iframe_fetch', label, iframe_url: String(iframeUrl).slice(0, 100), error });
         return;
       }
       if (!m3u8) {
-        LOG('[player] xoilac iframe has no .m3u8', iframeUrl);
-        GA.send('xoilac_channel_no_m3u8', { stage: 'm3u8_extraction', iframe_url: iframeUrl.slice(0, 100), html_len: htmlLen });
+        GA.send('xoilac_channel_no_m3u8', { stage: 'm3u8_extraction', label, iframe_url: String(iframeUrl).slice(0, 100), html_len: htmlLen });
         return;
       }
-      if (seen.has(m3u8)) {
-        GA.send('xoilac_channel_duplicate', { iframe_url: iframeUrl.slice(0, 100) });
-        return;
-      }
+      if (seen.has(m3u8)) { GA.send('xoilac_channel_duplicate', { iframe_url: String(iframeUrl).slice(0, 100) }); return; }
       seen.add(m3u8);
-      const num = (iframeUrl.match(/channel-?(\d+)/i) || [])[1];
-      const customLabel = num ? `Xoilac ${num}` : 'Xoilac';
-      results.push({
-        type: 'hls', url: m3u8, originalUrl: m3u8, customLabel,
-        fromXoilac: true, extractedFromIframe: true, pageUrl,
-      });
+      const num = (String(iframeUrl).match(/channel-?(\d+)/i) || [])[1];
+      const customLabel = label ? `Xoilac ${label}` : (num ? `Xoilac ${num}` : 'Xoilac');
+      results.push({ type: 'hls', url: m3u8, originalUrl: m3u8, customLabel, fromXoilac: true, extractedFromIframe: true, pageUrl });
       LOG('[player] xoilac channel ok', customLabel, m3u8);
-      GA.send('xoilac_channel_ok', { label: customLabel, iframe_url: iframeUrl.slice(0, 100), stream_url: m3u8.slice(0, 100) });
+      GA.send('xoilac_channel_ok', { label: customLabel, iframe_url: String(iframeUrl).slice(0, 100), stream_url: m3u8.slice(0, 100) });
     });
 
     // Keep the match page itself as a final option if extracted HLS fails.
